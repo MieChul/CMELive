@@ -1,0 +1,275 @@
+/* ════════════════════════════════════════════════
+   Unique Business Section — infinite horizontal marquee
+   Items (cards + media) are pinned above / below the
+   scrolling text inside each unit and move with it.
+   ════════════════════════════════════════════════ */
+
+/* ── Section shell ── */
+.ubs-section {
+  background-color: #171717;
+  overflow: hidden;
+  height: 600px;
+  position: relative;
+}
+
+/* ── Marquee track (two identical units → seamless loop) ──
+   width: max-content shrinks the block-level flex container
+   to its intrinsic size so translateX(-50%) = exactly one
+   unit width. */
+.ubs-marquee {
+  display: flex;
+  flex-direction: row;
+  width: max-content;
+  height: 100%;
+  /* Asymmetric: slow drift left→right (ease-in-out), then fast snap right→left (ease-in) */
+  animation: ubsSwayAsym 16s linear infinite;
+  will-change: transform;
+}
+
+@keyframes ubsSwayAsym {
+  /* Start at right, drift slowly left */
+  0% {
+    transform: translateX(0%);
+    animation-timing-function: ease-in-out;
+  }
+  /* Arrive at left end — then snap hard back right */
+  82% {
+    transform: translateX(-50%);
+    animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+  }
+  /* Back at right — cycle repeats */
+  100% {
+    transform: translateX(0%);
+  }
+}
+
+/* ── Single scrolling unit ── */
+.ubs-unit {
+  display: inline-flex;
+  align-items: center;       /* vertically centre the text */
+  height: 100%;
+  position: relative;        /* containing block for .ubs-item */
+  flex-shrink: 0;
+  padding: 0 80px;
+}
+
+/* ── Main marquee text ──
+   Reduced from 270 px → 175 px so cards/media are proportionate.
+   line-height: 1 prevents the tight 184 px spec from clipping glyphs. */
+.ubs-main-text {
+  font-family: 'Bakehaus', 'Bebas Neue', sans-serif;
+  font-size: clamp(60px, 12.15vw, 175px);
+  font-weight: 400;
+  font-style: normal;
+  color: #ffffff;
+  letter-spacing: -4.8px;
+  line-height: 1;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Base for all absolutely-placed items ── */
+.ubs-item {
+  position: absolute;
+  z-index: 2;   /* render above the text on overlap */
+}
+
+/* ─────────────────────────────────────────────
+   ABOVE the text  (top: values)
+   Items are centred on their top-left anchor via
+   transform-origin so the rotation feels natural.
+   ───────────────────────────────────────────── */
+
+/* excited.gif — far left, overlapping text from above */
+.ubs-item--1 {
+  left: 3%;
+  top: 68px;
+  transform: rotate(-8deg);
+}
+
+/* "AI-native thinking" pink card — centre-left, overlapping text */
+.ubs-item--2 {
+  left: 22%;
+  top: 52px;
+  transform: rotate(4.81deg);
+}
+
+/* cross-shaped-guy — centre, tight above text */
+.ubs-item--3 {
+  left: 52%;
+  top: 58px;
+  transform: rotate(11deg);
+}
+
+/* "Large scale impact" green card — right, overlapping text */
+.ubs-item--4 {
+  left: 76%;
+  top: 62px;
+  transform: rotate(-4deg);
+}
+
+/* ─────────────────────────────────────────────
+   BELOW the text  (bottom: values)
+   ───────────────────────────────────────────── */
+
+/* "First-of-a-kind" green card — left, overlapping text */
+.ubs-item--5 {
+  left: 9%;
+  bottom: 58px;
+  transform: rotate(-6.29deg);
+}
+
+/* bear.mp4 — centre-left, overlapping text */
+.ubs-item--6 {
+  left: 32%;
+  bottom: 64px;
+  transform: rotate(10deg);
+}
+
+/* "Experience Redefined" pink card — centre-right */
+.ubs-item--7 {
+  left: 57%;
+  bottom: 54px;
+  transform: rotate(-8deg);
+}
+
+/* omg.mp4 — right, overlapping text */
+.ubs-item--8 {
+  left: 81%;
+  bottom: 60px;
+  transform: rotate(6deg);
+}
+
+/* ── Cards ──
+   Figma: border-radius 20 px, backgrounds #A9ED9B / #F4B4C2
+   Font: Bakehaus 35 px, #1E1A22, letter-spacing -0.439 px */
+.ubs-card {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 22px 32px;
+  border-radius: 20px;
+  white-space: nowrap;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25);
+}
+
+.ubs-card--pink  { background-color: #F4B4C2; }
+.ubs-card--green { background-color: #A9ED9B; }
+
+.ubs-card-text {
+  font-family: 'Bakehaus', 'Bebas Neue', sans-serif;
+  font-size: clamp(16px, 2.08vw, 32px);
+  font-weight: 400;
+  font-style: normal;
+  color: #1E1A22;
+  letter-spacing: -0.439px;
+  line-height: 1.2;
+}
+
+.ubs-chevron {
+  flex-shrink: 0;
+  display: block;
+  width: 38px;
+  height: 38px;
+}
+
+/* ── Media thumbnails (gif / video) ── */
+.ubs-media {
+  display: block;
+  width: 185px;
+  height: 185px;
+  object-fit: cover;
+  border-radius: 24px;
+}
+
+/* taller crop for the cross-shaped-guy portrait */
+.ubs-media--tall {
+  width: 148px;
+  height: 208px;
+}
+
+/* ═══════════════════════
+   RESPONSIVE
+   ═══════════════════════ */
+
+@media (max-width: 1200px) {
+  .ubs-section { height: 540px; }
+
+  .ubs-media { width: 158px; height: 158px; }
+  .ubs-media--tall { width: 128px; height: 180px; }
+
+  .ubs-item--1 { top: 56px; }
+  .ubs-item--2 { top: 42px; }
+  .ubs-item--3 { top: 48px; }
+  .ubs-item--4 { top: 52px; }
+  .ubs-item--5 { bottom: 48px; }
+  .ubs-item--6 { bottom: 54px; }
+  .ubs-item--7 { bottom: 44px; }
+  .ubs-item--8 { bottom: 50px; }
+}
+
+@media (max-width: 968px) {
+  .ubs-section { height: 430px; }
+
+  .ubs-main-text {
+    font-size: clamp(48px, 9vw, 120px);
+    letter-spacing: -3px;
+  }
+
+  .ubs-media { width: 120px; height: 120px; border-radius: 18px; }
+  .ubs-media--tall { width: 98px; height: 138px; }
+
+  .ubs-card { padding: 16px 22px; gap: 12px; border-radius: 16px; }
+  .ubs-card-text { font-size: clamp(14px, 1.6vw, 24px); }
+  .ubs-chevron { width: 28px; height: 28px; }
+
+  .ubs-item--1 { top: 38px; }
+  .ubs-item--2 { top: 28px; }
+  .ubs-item--3 { top: 32px; }
+  .ubs-item--4 { top: 36px; }
+  .ubs-item--5 { bottom: 32px; }
+  .ubs-item--6 { bottom: 38px; }
+  .ubs-item--7 { bottom: 28px; }
+  .ubs-item--8 { bottom: 34px; }
+}
+
+@media (max-width: 640px) {
+  .ubs-section { height: 360px; }
+
+  .ubs-unit { padding: 0 36px; }
+
+  .ubs-main-text {
+    font-size: clamp(38px, 10vw, 68px);
+    letter-spacing: -2px;
+  }
+
+  .ubs-media        { width: 76px; height: 76px; border-radius: 12px; }
+  .ubs-media--tall  { width: 62px; height: 90px; }
+
+  .ubs-card         { padding: 10px 14px; gap: 8px; border-radius: 12px; }
+  .ubs-card-text    { font-size: 13px; line-height: 1.3; }
+  .ubs-chevron      { width: 20px; height: 20px; }
+
+  /* Reposition all 8 items to fit the smaller section */
+  .ubs-item--1 { top: 16px; }
+  .ubs-item--2 { top: 12px; }
+  .ubs-item--3 { top: 14px; }
+  .ubs-item--4 { top: 16px; }
+  .ubs-item--5 { bottom: 14px; }
+  .ubs-item--6 { bottom: 12px; }
+  .ubs-item--7 { bottom: 14px; }
+  .ubs-item--8 { bottom: 16px; }
+}
+
+@media (max-width: 400px) {
+  .ubs-section { height: 300px; }
+
+  .ubs-main-text    { font-size: 34px; letter-spacing: -1.5px; }
+
+  .ubs-media        { width: 60px; height: 60px; }
+  .ubs-media--tall  { width: 50px; height: 72px; }
+
+  .ubs-card         { padding: 8px 12px; gap: 6px; }
+  .ubs-card-text    { font-size: 11px; }
+  .ubs-chevron      { width: 16px; height: 16px; }
+}

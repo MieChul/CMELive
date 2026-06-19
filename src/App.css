@@ -1,0 +1,47 @@
+.app {
+  min-height: 100vh;
+  overflow-x: clip; /* clip doesn't create a scroll container, so sticky still works */
+}
+
+.loader-container {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-primary);
+  z-index: 9999;
+}
+
+.loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.loader-text {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 100px;
+  color: var(--accent-coral);
+  letter-spacing: -0.02em;
+  animation: loaderPulse 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  text-shadow: 0 0 40px rgba(242, 102, 91, 0.3);
+}
+
+@keyframes loaderPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+    text-shadow: 0 0 40px rgba(242, 102, 91, 0.3);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(0.95);
+    text-shadow: 0 0 60px rgba(242, 102, 91, 0.5);
+  }
+}
+
+main {
+  position: relative;
+}

@@ -1,0 +1,75 @@
+/* Outer cursor - trails behind */
+.cursor-outer {
+  width: 40px;
+  height: 40px;
+  border: 2px solid var(--accent-coral);
+  border-radius: 50%;
+  position: fixed;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 9998;
+  transition: width 0.3s ease, height 0.3s ease, border-color 0.3s ease, background-color 0.3s ease;
+  will-change: transform;
+  mix-blend-mode: difference;
+}
+
+.cursor-outer.hovering {
+  width: 60px;
+  height: 60px;
+  background-color: rgba(242, 102, 91, 0.1);
+  border-color: var(--accent-coral);
+  transform: translate(-30px, -30px) !important;
+}
+
+.cursor-outer.clicking {
+  width: 32px;
+  height: 32px;
+  background-color: rgba(242, 102, 91, 0.2);
+}
+
+/* Inner cursor - follows precisely */
+.cursor-inner {
+  width: 8px;
+  height: 8px;
+  background-color: var(--accent-coral);
+  border-radius: 50%;
+  position: fixed;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 9999;
+  transition: width 0.15s ease, height 0.15s ease, background-color 0.15s ease;
+  will-change: transform;
+}
+
+.cursor-inner.hovering {
+  width: 4px;
+  height: 4px;
+  background-color: #fff;
+}
+
+.cursor-inner.clicking {
+  width: 12px;
+  height: 12px;
+  background-color: #fff;
+}
+
+/* Hide on touch devices and mobile */
+@media (max-width: 768px), (hover: none) {
+  .cursor-outer,
+  .cursor-inner {
+    display: none;
+  }
+}
+
+/* Hide default cursor when custom cursor is active */
+body.custom-cursor-active * {
+  cursor: none !important;
+}
+
+@media (max-width: 768px), (hover: none) {
+  body.custom-cursor-active * {
+    cursor: auto !important;
+  }
+}

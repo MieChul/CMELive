@@ -1,0 +1,209 @@
+/* ─── Section ─── */
+.hero-section {
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+}
+
+
+/* ─── Text container ─── */
+.hero-text-container {
+  position: relative;
+  z-index: 10;
+  width: 1590px;
+  max-width: calc(100% - 138px);
+  margin: 0 auto;
+  text-align: center;
+}
+
+/* hero-title: only Rewriting + Stories in normal flow; CME is absolute */
+.hero-title {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  margin: 0;
+  padding: 0;
+  /* Pull the two words together so CME can bridge the gap */
+  gap: 0;
+}
+
+/* ─── Base: hidden until .visible parent ─── */
+.hero-word {
+  display: block;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+/* ─── Rewriting ─── */
+.hero-word.rewriting {
+  font-family: 'Bakehaus', 'Bebas Neue', sans-serif;
+  font-size: clamp(52px, min(14.48vw, 26vh), 250.278px);
+  font-weight: 400;
+  font-style: normal;
+  color: #1E1A22;
+  transform: translateX(-100vw);
+  /* push down slightly so CME overlaps into Rewriting from below */
+}
+
+/* ─── Stories ─── */
+.hero-word.stories {
+  position: relative;
+  font-family: 'Bakehaus', 'Bebas Neue', sans-serif;
+  font-size: clamp(52px, min(14.48vw, 26vh), 250.278px);
+  font-weight: 400;
+  font-style: normal;
+  left:6%;
+  color: #1E1A22;
+  transform: translateX(110vw);
+  /* pull up so CME overlaps into Stories from above */
+  margin-top: -0.18em;
+}
+
+/*
+  CME: absolute, centred vertically at the Rewriting/Stories junction.
+  top: 50% puts it at the midpoint of hero-title's height.
+  translateY(-50%) centres CME's own box on that midpoint.
+  left: ~8% aligns its left edge near where Rewriting's left edge starts.
+*/
+.hero-word.cme {
+  position: absolute;
+  top: 50%;
+  left:22%;
+  transform: translateY(calc(-50% - 80px));
+  font-family: 'Shine Dailys', 'Playfair Display', cursive;
+  font-size: clamp(32px, min(8.63vw, 15.5vh), 149.063px);
+  font-weight: 400;
+  font-style: normal;
+  line-height: 1;
+  color: #F2665B;
+  opacity: 0;
+  white-space: nowrap;
+}
+
+/* ─── Entrance animations ─── */
+@keyframes slideFromLeft {
+  from { transform: translateX(-110vw); opacity: 0; }
+  to   { transform: translateX(0);      opacity: 1; }
+}
+@keyframes slideFromRight {
+  from { transform: translateX(110vw);  opacity: 0; }
+  to   { transform: translateX(0);      opacity: 1; }
+}
+@keyframes dropCME {
+  from { transform: translateY(calc(-50% - 80px)); opacity: 0; }
+  to   { transform: translateY(-50%);              opacity: 1; }
+}
+
+.hero-text-container.visible .rewriting {
+  animation: slideFromLeft  1.4s cubic-bezier(0.23, 1, 0.32, 1) 0.1s  forwards;
+}
+.hero-text-container.visible .stories {
+  animation: slideFromRight 1.4s cubic-bezier(0.23, 1, 0.32, 1) 0.25s forwards;
+}
+.hero-text-container.visible .cme {
+  animation: dropCME        1.2s cubic-bezier(0.23, 1, 0.32, 1) 0.55s forwards;
+}
+
+/* ─── Floating icons ─── */
+.floating-elements {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.float-img {
+  position: absolute;
+  opacity: 0;
+  transition: transform 0.18s ease-out;
+  will-change: transform, opacity;
+}
+
+.float-img.visible {
+  animation: floatIn 1s cubic-bezier(0.23, 1, 0.32, 1) var(--delay, 0.7s) forwards;
+}
+
+@keyframes floatIn {
+  0%   { opacity: 0;    transform: translateY(30px) scale(0.85) rotate(var(--rot, 0deg)); }
+  65%  { opacity: 0.85; }
+  100% { opacity: 0.85; transform: translateY(0)     scale(1)    rotate(var(--rot, 0deg)); }
+}
+
+/* ─── Icon positions — compact, inside the text block area ─── */
+/* Sipper */
+.f-sipper  { left: 4%;   top: 30%;    --delay: 0.65s; --rot: -5deg;  }
+/* Camera */
+.f-camera  { right: 5%;  top: 10%;    --delay: 0.70s; --rot: 8deg;   }
+/* Vinyl */
+.f-vinyl   { left: 13%;  top: 7%;     --delay: 0.75s; --rot: -10deg; }
+/* Clapboard */
+.f-clap    { right: 16%; top: 5%;     --delay: 0.80s; --rot: 12deg;  }
+/* Cinema */
+.f-cine    { right: 5%;  bottom: 18%; --delay: 0.85s; --rot: 3deg;   }
+/* Video camera */
+.f-vcam    { right: 4%;  bottom: 5%;  --delay: 0.90s; --rot: -5deg;  }
+/* Headphones */
+.f-head    { right: 4%;  top: 35%;    --delay: 0.95s; --rot: 0deg;   }
+/* Ticket */
+.f-ticket  { left: 36%;  top: 4%;     --delay: 1.00s; --rot: -6deg;  }
+/* Projector */
+.f-proj    { left: 50%;  bottom: 6%;  --delay: 1.05s; --rot: 0deg;   }
+/* Star */
+.f-star    { left: 25%;  bottom: 18%; --delay: 1.10s; --rot: 15deg;  }
+/* Chair */
+.f-chair   { left: 4%;   bottom: 4%;  --delay: 1.15s; --rot: -8deg;  }
+
+/* ─── Responsive ─── */
+@media (max-width: 1400px) {
+  .hero-word.rewriting,
+  .hero-word.stories { letter-spacing: -5px; }
+  .hero-word.cme     { letter-spacing: -5px; }
+}
+@media (max-width: 1024px) {
+  .hero-text-container { max-width: calc(100% - 80px); }
+  .hero-word.rewriting,
+  .hero-word.stories { letter-spacing: -4px; }
+  .hero-word.cme     { letter-spacing: -4px; }
+}
+@media (max-width: 768px) {
+  .hero-section        { height: auto; min-height: 100vh; }
+  .hero-text-container { max-width: calc(100% - 40px); }
+  .hero-word.rewriting,
+  .hero-word.stories   { letter-spacing: -3px; }
+  .hero-word.cme       { letter-spacing: -3px; }
+  .dot-pattern-grid    { background-size: 50px 43px; }
+
+  /* Scale all icons down uniformly on tablet */
+  .float-img { transform-origin: center center; }
+  .f-cine    { width: 110px; }
+  .f-vcam    { width: 100px; }
+  .f-clap    { width: 70px; }
+  .f-proj    { width: 75px; }
+  .f-head    { width: 75px; }
+  .f-ticket  { width: 72px; }
+  .f-chair   { width: 75px; }
+}
+
+@media (max-width: 480px) {
+  .hero-word.rewriting,
+  .hero-word.stories { letter-spacing: -2px; }
+  .hero-word.cme     { letter-spacing: -2px; }
+
+  /* Further shrink + tuck icons to edges on phones */
+  .f-cine    { width: 80px;  right: 2%;  bottom: 22%; }
+  .f-vcam    { width: 78px;  right: 2%;  bottom: 2%;  }
+  .f-clap    { width: 56px;  right: 10%; top: 4%;     }
+  .f-vinyl   { width: 62px;  left: 8%;   top: 5%;     }
+  .f-camera  { width: 58px;  right: 3%;  top: 8%;     }
+  .f-sipper  { width: 40px;  left: 2%;   top: 28%;    }
+  .f-head    { width: 60px;  right: 2%;  top: 32%;    }
+  .f-ticket  { width: 56px;  left: 30%;  top: 3%;     }
+  .f-proj    { width: 58px;  left: 46%;  bottom: 4%;  }
+  .f-star    { width: 38px;  left: 18%;  bottom: 14%; }
+  .f-chair   { width: 60px;  left: 2%;   bottom: 2%;  }
+}

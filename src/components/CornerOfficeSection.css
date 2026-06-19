@@ -1,0 +1,235 @@
+.corner-office-section {
+  padding: 100px 70px;
+  background: transparent;
+}
+
+.corner-container {
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.corner-title-container {
+  text-align: center;
+  margin-bottom: 60px;
+  opacity: 0;
+  transform: translateY(50px);
+}
+
+.corner-title-container.visible {
+  animation: cornerTitleReveal 1s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+
+@keyframes cornerTitleReveal {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Figma: Bakehaus 85.9px / line-height 150px */
+.corner-subtitle {
+  font-family: 'Bakehaus', 'Bebas Neue', sans-serif;
+  font-size: clamp(36px, 4.97vw, 86px);
+  color: var(--text-dark);
+  display: block;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+/* Figma: Bakehaus ~176px / line-height 150px (~0.85) */
+.corner-title {
+  font-family: 'Bakehaus', 'Bebas Neue', sans-serif;
+  font-size: clamp(72px, 10.19vw, 176px);
+  color: var(--text-dark);
+  display: block;
+  letter-spacing: -0.04em;
+  line-height: 0.85;
+  margin-top: -0.05em;
+}
+
+.conversations-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 30px;
+}
+
+.conversation-card {
+  position: relative;
+  border-radius: 30px;
+  overflow: hidden;
+  height: 680px;
+  border: 1px solid;
+  opacity: 0;
+  transform: translateY(50px) scale(0.95);
+  transition: box-shadow 0.4s ease;
+}
+
+.conversation-card.visible {
+  animation: cardReveal 0.8s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+
+@keyframes cardReveal {
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.conversation-card:hover { box-shadow: 0 30px 60px rgba(0, 0, 0, 0.2); }
+
+.conversation-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+
+.conversation-card:hover .conversation-image { transform: scale(1.05); }
+
+.conversation-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.5) 50%, transparent 100%);
+}
+
+.play-button {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.play-button:hover {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1.15);
+}
+
+.conversation-content {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 40px;
+}
+
+.conversation-number {
+  font-family: 'Inter', sans-serif;
+  font-size: 14.87px;
+  letter-spacing: 1.49px;
+  display: block;
+  margin-bottom: 15px;
+  text-transform: uppercase;
+}
+
+/* Figma: Bakehaus 59.476px / line-height 59.476px (100%) */
+.conversation-title {
+  font-family: 'Bakehaus', 'Bebas Neue', sans-serif;
+  font-size: clamp(32px, 3.44vw, 59.476px);
+  color: #fff;
+  line-height: 1;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  margin-bottom: 12px;
+}
+
+.conversation-title span { display: block; }
+
+/* Figma: Inter 17.347px / line-height 24.782px (142.857%) / color #99A1AF */
+.conversation-subtitle {
+  font-family: 'Inter', sans-serif;
+  font-size: clamp(13px, 1vw, 17.347px);
+  font-weight: 400;
+  color: #99A1AF;
+  line-height: 1.42857;
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 1200px) {
+  .conversations-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 768px) {
+  .corner-office-section { padding: 60px 20px; }
+  .conversations-grid { grid-template-columns: 1fr; }
+  .conversation-card { height: 500px; }
+  .conversation-content { padding: 25px; }
+  .corner-title { letter-spacing: -0.02em; }
+}
+
+@media (max-width: 480px) {
+  .corner-subtitle { font-size: clamp(28px, 8vw, 60px); }
+  .corner-title { font-size: clamp(56px, 14vw, 120px); }
+}
+
+/* ── Carousel (active when >3 conversations) ─────────────────────────── */
+.conversations-wrap {
+  position: relative;
+}
+
+.conversations-wrap--carousel {
+  padding: 0 70px;
+}
+
+.carousel-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  color: #111;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  transition: transform 0.25s ease, background 0.25s ease;
+}
+
+.carousel-arrow:hover {
+  transform: translateY(-50%) scale(1.08);
+  background: #fff;
+}
+
+.carousel-arrow--prev { left: 0; }
+.carousel-arrow--next { right: 0; }
+
+.carousel-dots {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 36px;
+}
+
+.carousel-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.2s ease, background 0.2s ease, width 0.2s ease;
+}
+
+.carousel-dot:hover { background: rgba(0, 0, 0, 0.32); }
+
+.carousel-dot--active {
+  background: #F2665B;
+  width: 28px;
+  border-radius: 6px;
+}
+
+@media (max-width: 900px) {
+  .conversations-wrap--carousel { padding: 0; }
+  .carousel-arrow {
+    width: 42px;
+    height: 42px;
+  }
+  .carousel-arrow--prev { left: -8px; }
+  .carousel-arrow--next { right: -8px; }
+}

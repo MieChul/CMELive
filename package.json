@@ -1,0 +1,49 @@
+{
+  "name": "cmelive",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "server": "node server/index.js",
+    "dev:all": "concurrently \"npm run server\" \"npm run dev\"",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "node server/index.js",
+    "postinstall": "node scripts/postinstall.mjs"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.0.1",
+    "concurrently": "^9.0.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.10"
+  },
+  "dependencies": {
+    "@google-cloud/storage": "^7.14.0",
+    "axios": "^1.7.7",
+    "chart.js": "^4.4.4",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "exceljs": "^4.4.0",
+    "express": "^4.21.0",
+    "express-rate-limit": "^8.4.0",
+    "google-auth-library": "^10.6.2",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "lucide-react": "^1.9.0",
+    "morgan": "^1.10.0",
+    "pg": "^8.13.0",
+    "multer": "^1.4.5-lts.1",
+    "node-cron": "^4.2.1",
+    "react": "^19.2.5",
+    "react-chartjs-2": "^5.2.0",
+    "react-dom": "^19.2.5",
+    "react-hot-toast": "^2.4.1",
+    "react-router-dom": "^7.14.2",
+    "sql.js": "^1.11.0"
+  }
+}

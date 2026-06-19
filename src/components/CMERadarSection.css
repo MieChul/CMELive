@@ -1,0 +1,270 @@
+.cme-radar-section {
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  padding: clamp(40px, 6.94vw, 100px) clamp(16px, 3.47vw, 50px);
+  background: transparent;
+}
+
+.radar-container {
+  max-width: 1600px;
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.radar-title {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: min(1544px, 100%);
+  min-height: clamp(80px, 16.67vw, 240px);
+  margin: 0 auto clamp(30px, 4.17vw, 60px);
+
+  font-family: 'Bakehaus', 'Bebas Neue', sans-serif;
+  font-style: normal;
+  font-weight: 400;
+  font-size: clamp(48px, 12.5vw, 180px);
+  line-height: clamp(49.2px, 12.79vw, 184.2px);
+  letter-spacing: clamp(-3px, -0.52vw, -7.475px);
+  color: #1E1A22;
+  text-align: center;
+
+  opacity: 0;
+  transform: translateY(30px);
+  transition: all 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.radar-title.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* minmax(0, 1fr) prevents nowrap text from collapsing the left column */
+.radar-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(12px, 1.67vw, 24px);
+  align-items: stretch;
+}
+
+/* ── Left column: two image cards ── */
+.radar-cards {
+  display: flex;
+  gap: clamp(10px, 1.39vw, 20px);
+}
+
+.radar-card {
+  flex: 1;
+  min-width: 0;
+  opacity: 0;
+  transform: translateY(30px);
+  transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.radar-card.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Wrapper holds image + overlapping arrow button */
+.radar-card-image-wrap {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+/* Image container: overflow hidden for rounded corners on img */
+.radar-card-image {
+  border-radius: 24px;
+  overflow: hidden;
+  aspect-ratio: 1 / 1;
+  width: 100%;
+}
+
+.radar-card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.5s ease;
+}
+
+.radar-card:hover .radar-card-image img { transform: scale(1.05); }
+
+/* Arrow button positioned over bottom-right of image */
+.radar-card-btn {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  width: clamp(44px, 5vw, 72px);
+  height: clamp(44px, 5vw, 72px);
+  background-color: #1E1A22;
+  border: none;
+  border-radius: 50%;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+  z-index: 2;
+}
+
+.radar-card-btn:hover { transform: scale(1.1); }
+
+.radar-card-category {
+  display: block;
+  font-family: 'Inter', sans-serif;
+  font-size: clamp(10px, 0.83vw, 12px);
+  letter-spacing: 1.2px;
+  color: var(--text-dark);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.radar-card-meta {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 10px;
+  flex-wrap: nowrap;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 500;
+  font-size: clamp(11px, 0.97vw, 14px);
+  color: var(--text-dark);
+  white-space: nowrap;
+}
+
+.meta-dot {
+  width: 6px;
+  height: 6px;
+  background-color: #E05A4E;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.radar-card-title {
+  font-family: 'Bakehaus', 'Bebas Neue', sans-serif;
+  font-size: clamp(16px, 1.67vw, 24px);
+  font-weight: 400;
+  letter-spacing: -0.439px;
+  color: #1E1A22;
+  line-height: 1.25;
+}
+
+/* ── Right column: four info cards ── */
+.info-cards {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(8px, 1.11vw, 16px);
+  justify-content: space-between;
+}
+
+.info-card {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: clamp(12px, 1.39vw, 20px) clamp(14px, 1.67vw, 24px);
+  border-radius: 16px;
+  opacity: 0;
+  transform: translateX(30px);
+  transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+  gap: 12px;
+  min-width: 0;
+}
+
+.info-card.visible {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.info-card:hover { transform: translateX(4px); }
+
+.info-card-content {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.info-card-title {
+  font-family: 'Bakehaus', 'Bebas Neue', sans-serif;
+  font-size: clamp(14px, 1.53vw, 22px);
+  font-weight: 400;
+  letter-spacing: -0.439px;
+  color: #1E1A22;
+  line-height: 1.2;
+  margin-bottom: 4px;
+  white-space: normal;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.info-card-description {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 500;
+  font-size: clamp(11px, 1.11vw, 16px);
+  line-height: 1.4;
+  letter-spacing: -0.3px;
+  color: #1E1A22;
+  white-space: normal;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.info-card-btn {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  background-color: #1E1A22;
+  border: none;
+  border-radius: 50%;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+
+.info-card-btn:hover { transform: scale(1.1) rotate(45deg); }
+
+/* ─── Responsive ─── */
+@media (max-width: 1200px) {
+  .radar-content { grid-template-columns: 1fr; }
+  .radar-cards { flex-direction: row; }
+  .info-cards { justify-content: flex-start; }
+}
+
+@media (max-width: 768px) {
+  .cme-radar-section { padding: 32px 16px; }
+  .radar-title { letter-spacing: -3px; }
+  .radar-cards { flex-direction: row; gap: 12px; }
+  .radar-card-btn { width: 44px; height: 44px; }
+  .info-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .info-card { padding: 14px; }
+  .info-card-description { -webkit-line-clamp: 2; }
+}
+
+@media (max-width: 480px) {
+  .radar-cards { flex-direction: column; }
+  .info-cards { grid-template-columns: 1fr; }
+  .info-card-title { font-size: 15px; }
+  .info-card-description { font-size: 12px; }
+  .radar-card-meta { gap: 10px; flex-wrap: wrap; }
+}

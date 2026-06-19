@@ -1,0 +1,124 @@
+import { useState, useEffect } from 'react'
+import { Link, useLocation } from 'react-router-dom'
+import { useAuth, PLACEHOLDER_AVATAR } from '../context/AuthContext'
+import './shared/shared-exchange.css'
+
+export default function SiteHeader() {
+  const location = useLocation()
+  const { user, displayAvatar, logout, isAdmin } = useAuth()
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const { style } = document.body
+    const prevOverflow = style.overflow
+    style.overflow = 'hidden'
+    return () => {
+      style.overflow = prevOverflow
+    }
+  }, [menuOpen])
+
+  const isActive = (path) => {
+    if (path === '/') return location.pathname === '/'
+    return location.pathname === path || location.pathname.startsWith(`${path}/`)
+  }
+
+  const closeMenu = () => setMenuOpen(false)
+
+  return (
+    <header className="exch-header">
+      <div className="exch-header__inner">
+        <Link to="/" className="exch-header__logo" onClick={closeMenu}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="64" height="16" viewBox="0 0 64 16" fill="none" aria-label="LTM">
+            <path d="M4.88421 12.3211H16.8421V16.0011H4.21053C1.88463 16.0011 0 14.2107 0 12.0011V0.00105629H4.21053V11.6811C4.21053 12.0347 4.512 12.3211 4.88421 12.3211ZM14.1474 3.68106H21.8947C22.2669 3.68106 22.5684 3.96746 22.5684 4.32106V16.0011H26.7789V4.32106C26.7789 3.96746 27.0804 3.68106 27.4526 3.68106H35.2V0.00105629H14.1474V3.68106ZM56.4093 0.00105629C56.4093 0.00105629 56.0387 -0.0229437 55.8518 0.157856C55.6211 0.381856 55.3836 0.996256 55.3836 0.996256L51.3684 10.6779L47.3533 0.996256C47.3533 0.996256 47.1158 0.381856 46.8851 0.157856C46.6981 -0.0229437 46.3276 0.00105629 46.3276 0.00105629H38.7368V15.9979H42.9474V3.81546C42.9474 3.59466 43.1528 3.41546 43.3617 3.41546C43.7878 3.41546 43.9663 3.90026 44.1819 4.42186C44.3975 4.94346 48.7983 15.3947 48.7983 15.3947C48.9499 15.7611 49.3238 16.0027 49.7381 16.0027H52.9987C53.4131 16.0027 53.787 15.7611 53.9385 15.3947C53.9385 15.3947 58.3394 4.94346 58.555 4.42186C58.7705 3.90026 58.9491 3.41546 59.3752 3.41546C59.8013 3.41546 59.7895 3.59466 59.7895 3.81546V16.0011H64V0.00105629H56.4093Z" fill="#F2665B"/>
+          </svg>
+          <span className="exch-header__ai">AI</span>
+          <span className="exch-header__cme">CME Live</span>
+        </Link>
+
+        {/* Desktop nav */}
+        <nav className={`exch-header__nav ${menuOpen ? 'exch-header__nav--open' : ''}`}>
+          <Link to="/" className={`exch-header__link ${isActive('/') ? 'exch-header__link--active' : ''}`} onClick={closeMenu}>
+            CME Live
+          </Link>
+          <Link
+            to="/ai-possible"
+            className={`exch-header__link ${isActive('/ai-possible') ? 'exch-header__link--active' : ''}`}
+            onClick={closeMenu}
+          >
+            Mission:AI&nbsp;Possible
+          </Link>
+          <Link
+            to="/ai-exchange"
+            className={`exch-header__link ${isActive('/ai-exchange') ? 'exch-header__link--active' : ''}`}
+            onClick={closeMenu}
+          >
+            AI Exchange
+          </Link>
+          {isAdmin && (
+            <Link
+              to="/admin"
+              className={`exch-header__link ${isActive('/admin') ? 'exch-header__link--active' : ''}`}
+              onClick={closeMenu}
+            >
+              Admin
+            </Link>
+          )}
+          {/* User info shown inside mobile menu */}
+          {user && (
+            <div className="exch-header__user-mobile">
+              <img
+                src={displayAvatar(user)}
+                alt=""
+                className="exch-header__avatar"
+                onError={(e) => { e.target.onerror = null; e.target.src = PLACEHOLDER_AVATAR }}
+              />
+              <div>
+                <span className="exch-header__user-name">{user.displayName}</span>
+                <button type="button" className="exch-header__logout" onClick={() => { logout(); closeMenu() }}>
+                  Sign out
+                </button>
+              </div>
+            </div>
+          )}
+        </nav>
+
+        <div className="exch-header__right">
+          {/* Avatar only on desktop */}
+          {user && (
+            <div className="exch-header__user">
+              <img
+                src={displayAvatar(user)}
+                alt=""
+                className="exch-header__avatar"
+                onError={(e) => { e.target.onerror = null; e.target.src = PLACEHOLDER_AVATAR }}
+              />
+              <div className="exch-header__user-info">
+                <span className="exch-header__user-name">{user.displayName}</span>
+                <button type="button" className="exch-header__logout" onClick={logout}>
+                  Sign out
+                </button>
+              </div>
+            </div>
+          )}
+          <button
+            className="exch-header__burger"
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen(o => !o)}
+          >
+            {menuOpen ? (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            ) : (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+              </svg>
+            )}
+          </button>
+        </div>
+      </div>
+    </header>
+  )
+}

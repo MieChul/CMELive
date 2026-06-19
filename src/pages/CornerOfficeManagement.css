@@ -1,0 +1,242 @@
+/* Corner Office admin tab — additive styles on top of TestimonialsManagement.css */
+
+.co-modal { max-width: 760px; }
+
+.co-media-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  margin-bottom: 14px;
+}
+
+.co-media-block__label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 600;
+}
+
+.co-media-block__row {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.co-media-block__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.co-image-preview,
+.co-video-preview {
+  width: 180px;
+  height: 110px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.co-image-preview img,
+.co-video-preview video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.co-image-preview__empty,
+.co-video-preview__empty {
+  color: rgba(255, 255, 255, 0.25);
+}
+
+.co-progress {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.co-progress__bar {
+  height: 100%;
+  background: #F2665B;
+  transition: width 0.2s ease;
+}
+
+.co-color-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.co-color-row input[type='color'] {
+  width: 42px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.co-color-row input[type='text'] {
+  flex: 1;
+}
+
+.co-swatches {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.co-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.co-swatch:hover { transform: scale(1.1); }
+
+.co-swatch--border {
+  border: 2px solid;
+  background: transparent !important;
+}
+
+.co-swatch--active {
+  border-color: #fff !important;
+  transform: scale(1.1);
+}
+
+/* List view */
+.co-grid {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  /* Scroll the corner office cards inside the page to keep toolbar fixed */
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+  padding-right: 8px;
+  min-height: 0;
+}
+
+.co-card {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.co-card__media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  background: rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+
+.co-card__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.co-card__img--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.25);
+}
+
+.co-card__media-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.65) 0%, transparent 55%);
+  pointer-events: none;
+}
+
+.co-card__play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(6px);
+  border: 1.5px solid rgba(255, 255, 255, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+
+.co-card__num {
+  position: absolute;
+  bottom: 8px;
+  left: 12px;
+  font-family: 'Bakehaus', 'Bebas Neue', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.co-card__chip {
+  position: absolute !important;
+  top: 8px;
+  right: 8px;
+}
+
+.co-card__body {
+  padding: 14px 14px 8px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.co-card__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+  line-height: 1.3;
+}
+
+.co-card__sub {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.4;
+}
+
+.co-card__meta {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  margin-top: 4px;
+}
+
+.co-card__warn {
+  color: #FFB347;
+}
+
+.co-card .tm-card__actions {
+  padding: 8px 14px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  margin-top: auto;
+}

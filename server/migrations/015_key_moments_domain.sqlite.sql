@@ -1,0 +1,1 @@
+ALTER TABLE keyMoments ADD COLUMN domain TEXT NOT NULL DEFAULT '';

@@ -1,0 +1,38 @@
+# ── Dependencies ───────────────────────────────────────────────────────────────
+# Always reinstalled fresh inside the image
+node_modules
+
+# ── Secrets ────────────────────────────────────────────────────────────────────
+# Never bake env files into the image
+.env
+.env.*
+
+# ── Built frontend ─────────────────────────────────────────────────────────────
+# Rebuilt from source inside the builder stage
+dist/
+
+# ── Version control & IDE ──────────────────────────────────────────────────────
+.git
+.gitignore
+.claude
+
+# ── Azure-specific files ───────────────────────────────────────────────────────
+# These are IISNode / Azure App Service config — not used on Cloud Run
+web.config
+.deployment
+
+# ── SQLite database ────────────────────────────────────────────────────────────
+# Production uses Cloud SQL PostgreSQL. The .db file must not ship in the image.
+# sourceCatalog.js in the same folder IS needed — exclude only *.db files.
+server/data/*.db
+
+# ── Documentation ──────────────────────────────────────────────────────────────
+*.md
+DEPLOY.md
+README.md
+CLAUDE.md
+GCP_MIGRATION_RUNBOOK.md
+
+# ── OS artefacts ───────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
