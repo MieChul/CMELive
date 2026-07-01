@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cornerOffice as cornerOfficeApi } from '../services/api'
+import ConfirmDialog from '../components/ConfirmDialog'
 import '../pages/TestimonialsManagement.css'
 import './CornerOfficeManagement.css'
 
@@ -133,7 +134,6 @@ function ConversationFormModal({ initial, onClose, onSaved }) {
             <X size={18} />
           </button>
         </header>
-
         <form className="tm-form" onSubmit={onSubmit}>
           {/* Cover image */}
           <div className="co-media-block">
@@ -199,14 +199,14 @@ function ConversationFormModal({ initial, onClose, onSaved }) {
             <span>Title <em>*</em></span>
             <input type="text" maxLength={255} value={form.title}
               onChange={(e) => set('title', e.target.value)}
-              placeholder="Neural Networks" required />
+              placeholder="E.g., The Future of AI in Media" required />
           </label>
 
           <label className="tm-field">
             <span>Subtitle</span>
             <input type="text" maxLength={500} value={form.subtitle}
               onChange={(e) => set('subtitle', e.target.value)}
-              placeholder="Deep learning architecture" />
+              placeholder="E.g., Insights from industry leaders discussing emerging technologies" />
           </label>
 
           <div className="tm-form__row tm-form__row--two">
@@ -241,12 +241,57 @@ function ConversationFormModal({ initial, onClose, onSaved }) {
   )
 }
 
+function ConversationViewModal({ item, onClose }) {
+  if (!item) return null
+  return (
+    <div className="tm-modal__backdrop" onClick={onClose}>
+      <div className="tm-modal co-modal co-view-modal" onClick={(e) => e.stopPropagation()}>
+        <header className="tm-modal__head">
+          <h3>{item.title}</h3>
+          <button type="button" className="tm-modal__close" onClick={onClose} aria-label="Close">
+            <X size={18} />
+          </button>
+        </header>
+
+        <div className="co-view-body">
+          {item.videoUrl ? (
+            <video
+              className="co-view-video"
+              src={item.videoUrl}
+              poster={item.imageUrl || undefined}
+              controls
+              autoPlay
+              preload="metadata"
+            />
+          ) : item.imageUrl ? (
+            <img className="co-view-image" src={item.imageUrl} alt={item.title} />
+          ) : (
+            <div className="co-view-empty"><Film size={40} /><p>No media available</p></div>
+          )}
+
+          <div className="co-view-meta">
+            {item.subtitle && <p className="co-view-sub">{item.subtitle}</p>}
+            <div className="co-view-tags">
+              <span className={`tm-chip ${item.isActive ? 'tm-chip--on' : 'tm-chip--off'}`}>
+                {item.isActive ? 'Visible' : 'Hidden'}
+              </span>
+              <span className="tm-chip tm-chip--off">Order: {item.displayOrder}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function CornerOfficeManagement() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [editing, setEditing] = useState(null) // conversation object or {} for new
+  const [editing, setEditing] = useState(null)
+  const [viewing, setViewing] = useState(null)
   const [query, setQuery] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -301,10 +346,10 @@ export default function CornerOfficeManagement() {
   }
 
   const onDelete = async (item) => {
-    if (!window.confirm(`Delete "${item.title}"? This cannot be undone.`)) return
     try {
       await cornerOfficeApi.remove(item.id)
       setItems((prev) => prev.filter((t) => t.id !== item.id))
+      setConfirmDelete(null)
       toast.success('Conversation deleted')
     } catch (err) {
       toast.error(err.response?.data?.error || 'Delete failed')
@@ -363,30 +408,37 @@ export default function CornerOfficeManagement() {
             const number = numberIndex.get(t.id) || '—'
             return (
               <li key={t.id} className={`tm-card co-card ${t.isActive ? '' : 'tm-card--inactive'}`}>
-                <div className="co-card__media">
-                  {t.imageUrl
-                    ? <img src={t.imageUrl} alt={t.title} className="co-card__img" />
-                    : <div className="co-card__img co-card__img--empty"><Film size={32} /></div>}
-                  <div className="co-card__media-overlay" />
-                  {t.videoUrl && (
-                    <div className="co-card__play"><Play size={20} fill="currentColor" /></div>
-                  )}
-                  <span className="co-card__num">
-                    {t.isActive ? number : '–'}
-                  </span>
-                  <span className={`tm-chip ${t.isActive ? 'tm-chip--on' : 'tm-chip--off'} co-card__chip`}>
-                    {t.isActive ? 'Visible' : 'Hidden'}
-                  </span>
-                </div>
-
-                <div className="co-card__body">
-                  <div className="co-card__title">{t.title}</div>
-                  {t.subtitle && <div className="co-card__sub">{t.subtitle}</div>}
-                  <div className="co-card__meta">
-                    <span>Order: {t.displayOrder}</span>
-                    {!t.videoUrl && <span className="co-card__warn">No video</span>}
+                <button
+                  type="button"
+                  className="co-card__open"
+                  onClick={() => setViewing(t)}
+                  aria-label={`Preview ${t.title}`}
+                >
+                  <div className="co-card__media">
+                    {t.imageUrl
+                      ? <img src={t.imageUrl} alt={t.title} className="co-card__img" />
+                      : <div className="co-card__img co-card__img--empty"><Film size={32} /></div>}
+                    <div className="co-card__media-overlay" />
+                    {t.videoUrl && (
+                      <div className="co-card__play"><Play size={20} fill="currentColor" /></div>
+                    )}
+                    <span className="co-card__num">
+                      {t.isActive ? number : '–'}
+                    </span>
+                    <span className={`tm-chip ${t.isActive ? 'tm-chip--on' : 'tm-chip--off'} co-card__chip`}>
+                      {t.isActive ? 'Visible' : 'Hidden'}
+                    </span>
                   </div>
-                </div>
+
+                  <div className="co-card__body">
+                    <div className="co-card__title">{t.title}</div>
+                    {t.subtitle && <div className="co-card__sub">{t.subtitle}</div>}
+                    <div className="co-card__meta">
+                      <span>Order: {t.displayOrder}</span>
+                      {!t.videoUrl && <span className="co-card__warn">No video</span>}
+                    </div>
+                  </div>
+                </button>
 
                 <div className="tm-card__actions">
                   <button type="button" className="tm-btn tm-btn--ghost" onClick={() => onToggleActive(t)}>
@@ -396,7 +448,7 @@ export default function CornerOfficeManagement() {
                   <button type="button" className="tm-btn tm-btn--ghost" onClick={() => setEditing(t)}>
                     <Pencil size={14} /> Edit
                   </button>
-                  <button type="button" className="tm-btn tm-btn--danger" onClick={() => onDelete(t)}>
+                  <button type="button" className="tm-btn tm-btn--danger" onClick={() => setConfirmDelete(t)}>
                     <Trash2 size={14} /> Delete
                   </button>
                 </div>
@@ -411,6 +463,25 @@ export default function CornerOfficeManagement() {
           initial={editing}
           onClose={() => setEditing(null)}
           onSaved={upsert}
+        />
+      )}
+
+      {viewing && (
+        <ConversationViewModal
+          item={viewing}
+          onClose={() => setViewing(null)}
+        />
+      )}
+
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Delete Conversation"
+          message={`Delete "${confirmDelete.title}"? This cannot be undone.`}
+          confirmText="Delete"
+          cancelText="Cancel"
+          isDanger={true}
+          onConfirm={() => onDelete(confirmDelete)}
+          onCancel={() => setConfirmDelete(null)}
         />
       )}
     </section>

@@ -325,6 +325,68 @@
   border-color: var(--border-coral);
 }
 .um-dd__label { flex: 1; text-align: left; text-transform: uppercase; }
+.um-dd__chev { transition: transform 0.18s ease; opacity: 0.85; }
+.um-dd__chev--open { transform: rotate(180deg); }
+
+/* Native <select> dropdown — matches AdminPage form-field select look */
+.um-dd__select-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px 7px 12px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  min-width: 130px;
+  transition: border-color var(--transition), background var(--transition), box-shadow var(--transition);
+  position: relative;
+}
+.um-dd__select-wrap:hover {
+  border-color: var(--border-coral);
+  background: rgba(242,102,91,0.04);
+}
+.um-dd__select-wrap:focus-within {
+  border-color: var(--border-coral);
+  background: rgba(242,102,91,0.03);
+  box-shadow: 0 0 0 3px rgba(242,102,91,0.10);
+}
+.um-dd__select-wrap--admin {
+  color: var(--coral);
+  background: rgba(242,102,91,0.08);
+  border-color: var(--border-coral);
+}
+.um-dd__select-wrap::after {
+  content: '';
+  width: 6px; height: 6px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translateY(-2px);
+  opacity: 0.65;
+  margin-left: 2px;
+  pointer-events: none;
+}
+.um-dd__select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: inherit;
+  font: 600 12.5px/1 inherit;
+  letter-spacing: 0.02em;
+  padding: 2px 4px 2px 0;
+  cursor: pointer;
+  flex: 1;
+  font-family: inherit;
+}
+.um-dd__select:disabled { cursor: progress; opacity: 0.7; }
+.um-dd__select option {
+  background: #1a1a2e;
+  color: var(--text);
+  letter-spacing: normal;
+  text-transform: none;
+}
 .um-dd__panel {
   position: absolute;
   top: calc(100% + 6px);
@@ -332,11 +394,19 @@
   min-width: 180px;
   z-index: 50;
   padding: 6px;
-  background: #0d0d18;
-  border: 1px solid var(--border-coral);
+  background: #0d0d18;  border: 1px solid var(--border-coral);
   border-radius: var(--radius-sm);
   box-shadow: 0 12px 36px rgba(0,0,0,0.6);
   animation: fadeUp 0.16s ease-out;
+}
+/* Portal-rendered floating variant: positioned via inline style from JS,
+   sits above any scroll containers so it never gets clipped. */
+.um-dd__panel--floating {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: auto;
+  z-index: 1000;
 }
 .um-dd__item {
   display: flex;

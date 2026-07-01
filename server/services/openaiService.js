@@ -51,7 +51,7 @@ export async function reviewQuestions({ surveyTitle, surveyDescription, question
     description: surveyDescription,
     questions: questions.map((q) => ({ id: q.id, text: q.text, type: q.type })),
   })
-  console.log('[AI] review – model="gemini-2.0-flash" backend=Vertex AI')
+  console.log('[AI] review – model="gemini-2.5-flash" backend=Vertex AI')
   const raw = await callGemini(REVIEW_SYSTEM, userContent)
   if (!raw) throw new Error('Empty AI response from Gemini')
   let parsed
@@ -118,7 +118,12 @@ function parseRssTag(xmlChunk, tagName, { stripUrls = false } = {}) {
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    // Decode ALL numeric HTML entities (decimal &#8217; and hex &#x2019;)
+    // This covers curly quotes, dashes, ellipsis, and every other encoded character
+    .replace(/&#x([0-9a-fA-F]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(Number(dec)))
     .replace(/<[^>]+>/g, ' ')        // strip again — catches tags revealed by entity decode
   if (stripUrls) {
     value = value.replace(/https?:\/\/\S+/g, '') // remove bare URLs (Google RSS leaks them in description)
@@ -139,6 +144,7 @@ function toShortText(text, max = 170) {
  *   1. <enclosure> with an image MIME type
  *   2. <media:thumbnail url="...">
  *   3. <media:content> with medium="image" or image/* type
+ *   4. <img src="..."> embedded inside <description> or <content:encoded> HTML
  * Returns null if no image found.
  */
 function parseRssItemImage(raw) {
@@ -148,11 +154,11 @@ function parseRssItemImage(raw) {
     const attrs = encMatch[1]
     const encType = (attrs.match(/type=["']([^"']+)["']/i) || [])[1] || ''
     const encUrl  = (attrs.match(/url=["']([^"']+)["']/i)  || [])[1] || ''
-    if (encType.startsWith('image/') && /^https?:\/\//.test(encUrl)) return encUrl
+    if (encType.startsWith('image/') && /^https:\/\//.test(encUrl)) return encUrl
   }
   // <media:thumbnail url="..." />  (Media RSS)
   const thumbMatch = raw.match(/<media:thumbnail[^>]+url=["']([^"']+)["']/i)
-  if (thumbMatch && /^https?:\/\//.test(thumbMatch[1])) return thumbMatch[1]
+  if (thumbMatch && /^https:\/\//.test(thumbMatch[1])) return thumbMatch[1]
   // <media:content url="..." medium="image">  or  type="image/..."
   const mediaMatch = raw.match(/<media:content([^>]+)>/i)
   if (mediaMatch) {
@@ -160,7 +166,16 @@ function parseRssItemImage(raw) {
     const mUrl    = (attrs.match(/url=["']([^"']+)["']/i)    || [])[1] || ''
     const mMedium = (attrs.match(/medium=["']([^"']+)["']/i) || [])[1] || ''
     const mType   = (attrs.match(/type=["']([^"']+)["']/i)   || [])[1] || ''
-    if (/^https?:\/\//.test(mUrl) && (mMedium === 'image' || mType.startsWith('image/'))) return mUrl
+    if (/^https:\/\//.test(mUrl) && (mMedium === 'image' || mType.startsWith('image/'))) return mUrl
+  }
+  // <img src="..."> embedded in <description> or <content:encoded> HTML (WordPress feeds)
+  const htmlBlock = raw.match(/<(?:description|content:encoded)>([\s\S]*?)<\/(?:description|content:encoded)>/i)
+  if (htmlBlock) {
+    const decoded = htmlBlock[1]
+      .replace(/^<!\[CDATA\[/, '').replace(/\]\]>$/, '')
+      .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&')
+    const imgMatch = decoded.match(/<img[^>]+src=["']([^"']+)["']/i)
+    if (imgMatch && /^https:\/\//.test(imgMatch[1])) return imgMatch[1]
   }
   return null
 }
@@ -186,7 +201,7 @@ function parseRssItems(xml) {
     // Extract publication date — critical for preventing AI from hallucinating wrong years
     const pubDateRaw = parseRssTag(raw, 'pubDate') || parseRssTag(raw, 'dc:date') || null
     const pubDate = pubDateRaw ? normalisePubDate(pubDateRaw) : null
-    if (!title || !link) continue
+    if (!title || !link || !/^https?:\/\//.test(link)) continue
     items.push({ title, description, link, imageUrl: parseRssItemImage(raw), sourceName, pubDate })
   }
   return items
@@ -204,7 +219,7 @@ function parseAtomEntries(xml) {
     // Atom uses <updated> or <published> for dates
     const pubDateRaw = parseRssTag(raw, 'published') || parseRssTag(raw, 'updated') || null
     const pubDate = pubDateRaw ? normalisePubDate(pubDateRaw) : null
-    if (!title || !link) continue
+    if (!title || !link || !/^https?:\/\//.test(link)) continue
     items.push({ title, description: summary, link, imageUrl: parseRssItemImage(raw), pubDate })
   }
   return items
@@ -300,6 +315,7 @@ async function fetchNewsApiItems({ keywords } = {}) {
         title: toShortText(item?.title || '', 200),
         description: toShortText(item?.description || item?.content || '', 1200),
         link: String(item?.url || '').trim(),
+        imageUrl: item?.urlToImage && /^https:\/\//.test(item.urlToImage) ? item.urlToImage : null,
       }))
       .filter((item) => item.title && item.link)
       .filter(filter)
@@ -384,11 +400,11 @@ async function fetchGoogleCseItems({ keywords } = {}) {
  * Used by the news agent to collect articles for DB storage.
  *
  * @param {number} [limit=25]
- * @param {{ enabledSources?: string[], customSources?: {rssUrl:string,label:string}[], keywords?: string[] }} [options]
+ * @param {{ enabledSources?: string[], customSources?: {rssUrl:string,label:string}[], keywords?: string[], catalogName?: 'ai'|'trends' }} [options]
  * @returns {Promise<{title: string, description: string, link: string}[]>}
  */
 export async function collectRawArticles(limit = 25, options = {}) {
-  const { enabledSources, customSources = [], keywords } = options
+  const { enabledSources, customSources = [], keywords, catalogName = 'ai' } = options
   const rawItems = []
   const seen = new Set()
 
@@ -401,11 +417,19 @@ export async function collectRawArticles(limit = 25, options = {}) {
     return true
   }
 
-  const isSafeUrl = (url) => /^https?:\/\/.{4,}/.test(String(url || '').trim())
+  const SSRF_BLOCK = /^(localhost$|127\.|0\.0\.0\.0$|::1$|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|fc[\da-f]{2}:|fd[\da-f]{2}:)/i
+  const isSafeUrl = (url) => {
+    const s = String(url || '').trim()
+    if (!/^https?:\/\/.{4,}/.test(s)) return false
+    try { return !SSRF_BLOCK.test(new URL(s).hostname) } catch { return false }
+  }
 
   // If specific sources are configured, use the catalog; otherwise fall back to legacy RSS
   if (enabledSources && enabledSources.length > 0) {
-    const { SOURCE_CATALOG } = await import('../data/sourceCatalog.js')
+    const catalogModule = await import('../data/sourceCatalog.js')
+    const SOURCE_CATALOG = catalogName === 'trends'
+      ? catalogModule.TRENDS_SOURCE_CATALOG
+      : catalogModule.SOURCE_CATALOG
 
     // NewsAPI (broad keyword-based fetch)
     if (enabledSources.includes('newsapi')) {

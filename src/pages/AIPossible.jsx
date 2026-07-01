@@ -56,6 +56,26 @@ import iconStar from '../assets/Icons/Star.svg'
 
 import './AIPossible.css'
 
+// ─── Liked-state localStorage helpers ────────────────────────────────────────
+// Stores a Set of liked moment IDs in localStorage as a browser-local fallback
+// so the heart stays red after a page refresh even if the server call is slow.
+const KM_LIKED_KEY = 'km_liked_ids'
+
+function readLocalLikedIds() {
+  try {
+    const raw = localStorage.getItem(KM_LIKED_KEY)
+    return new Set(JSON.parse(raw || '[]').map(Number))
+  } catch {
+    return new Set()
+  }
+}
+
+function writeLocalLikedIds(ids) {
+  try {
+    localStorage.setItem(KM_LIKED_KEY, JSON.stringify([...ids]))
+  } catch { /* quota exceeded — ignore */ }
+}
+
 const AIPossible = () => {
   const [isLoading, setIsLoading] = useState(true)
 
@@ -135,10 +155,9 @@ const HeroVideoSection = () => {
     return () => clearInterval(autoRef.current)
   }, [autoPlay, activeIndex])
 
-  const handlePlayClick = (url) => {
+  const handlePlayClick = () => {
     setAutoPlay(false)
     clearInterval(autoRef.current)
-    if (url && url !== '#') window.open(url, '_blank')
   }
 
   const getOffset = (index) => (index - activeIndex + videoCards.length) % videoCards.length
@@ -174,10 +193,13 @@ const HeroVideoSection = () => {
                       <span className="title-premiere">Premiere</span>
                     </h1>
                     <div className="video-play-area">
-                      <button
+                      <a
                         className={`play-btn ${!autoPlay ? 'play-btn--active' : ''}`}
-                        onClick={(e) => { e.stopPropagation(); handlePlayClick(card.url) }}
+                        href={card.url || '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         aria-label="Play video"
+                        onClick={(e) => { e.stopPropagation(); handlePlayClick() }}
                       >
                         <svg className="play-circle" width="84" height="84" viewBox="0 0 84 84" fill="none">
                           <circle cx="42" cy="42" r="40" stroke="white" strokeWidth="1.5" strokeOpacity="0.55"/>
@@ -186,7 +208,7 @@ const HeroVideoSection = () => {
                           )}
                           <path d="M35 26L60 42L35 58V26Z" fill="white"/>
                         </svg>
-                      </button>
+                      </a>
                     </div>
                     <div className="video-player-brand">
                       <img src={playerIcon} alt="LVM" className="player-brand-logo" />
@@ -305,6 +327,7 @@ const CardModal = ({ card, onClose }) => {
 const HorizontalCarousel = ({ items, renderCard, autoInterval = 4000 }) => {
   const trackRef = useRef(null)
   const timerRef = useRef(null)
+  const [isInView, setIsInView] = useState(false)
 
   const getStep = useCallback(() => {
     const track = trackRef.current
@@ -332,8 +355,21 @@ const HorizontalCarousel = ({ items, renderCard, autoInterval = 4000 }) => {
 
   const resetTimer = useCallback(() => {
     clearInterval(timerRef.current)
+    if (!isInView) return
     timerRef.current = setInterval(() => scrollStep(1), autoInterval)
-  }, [autoInterval, scrollStep])
+  }, [autoInterval, scrollStep, isInView])
+
+  // Observe the track so auto-scroll only runs when the carousel is on screen.
+  useEffect(() => {
+    const el = trackRef.current
+    if (!el) return undefined
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsInView(entry.isIntersecting),
+      { threshold: 0.25 },
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   useEffect(() => {
     resetTimer()
@@ -503,7 +539,7 @@ const KeyMomentCard = ({ item, index, onSelect }) => {
 }
 
 const renderKeyMomentCard = (item, i, onSelect) => (
-  <KeyMomentCard key={i} item={item} index={i} onSelect={onSelect} />
+  <KeyMomentCard key={item.id ?? i} item={item} index={i} onSelect={onSelect} />
 )
 
 // ─── Structured metadata display ─────────────────────────────────────────────
@@ -615,13 +651,13 @@ const KeyMomentMetadata = ({ metadata, fallbackDescription }) => {
 
 // ─── Key Moments modal ────────────────────────────────────────────────────────
 
-const KeyMomentVideoModal = ({ moment, onClose }) => {
+const KeyMomentVideoModal = ({ moment, onClose, onUpdate }) => {
   const videoRef = useRef(null)
   const [videoError, setVideoError] = useState(false)
   const [likes, setLikes] = useState(moment.likes ?? 0)
   const [views, setViews] = useState(moment.views ?? 0)
   const [shares, setShares] = useState(moment.shares ?? 0)
-  const [liked, setLiked] = useState(false)
+  const [liked, setLiked] = useState(moment.userLiked ?? false)
   const [shareCopied, setShareCopied] = useState(false)
 
   useEffect(() => {
@@ -634,12 +670,20 @@ const KeyMomentVideoModal = ({ moment, onClose }) => {
     }
   }, [onClose])
 
-  // Record view on open
+  // Record view on open — deduplicated per session so reopening the same video
+  // doesn't keep inflating the counter.
   useEffect(() => {
+    const sessionKey = `km_viewed_${moment.id}`
+    if (sessionStorage.getItem(sessionKey)) return // already counted this session
+
     keyMomentsApi.recordView(moment.id).then((res) => {
-      if (res?.data?.ok) setViews((v) => v + 1)
+      if (res?.data?.ok && res.data.views != null) {
+        sessionStorage.setItem(sessionKey, '1')
+        setViews(res.data.views)
+        onUpdate?.({ id: moment.id, views: res.data.views })
+      }
     }).catch(() => {})
-  }, [moment.id])
+  }, [moment.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const videoSrc = moment.playbackUrl || ''
   const tags = splitTags(moment.tags)
@@ -673,8 +717,11 @@ const KeyMomentVideoModal = ({ moment, onClose }) => {
     try {
       const res = await keyMomentsApi.like(moment.id, action)
       if (res?.data?.ok) {
-        setLikes(res.data.likes)
-        setLiked(res.data.userLiked ?? !liked)
+        const newLikes = res.data.likes
+        const newLiked = res.data.userLiked ?? !liked
+        setLikes(newLikes)
+        setLiked(newLiked)
+        onUpdate?.({ id: moment.id, likes: newLikes, userLiked: newLiked })
       }
     } catch {
       // revert optimistic update
@@ -694,7 +741,10 @@ const KeyMomentVideoModal = ({ moment, onClose }) => {
         setTimeout(() => setShareCopied(false), 2000)
       }
       const res = await keyMomentsApi.recordShare(moment.id)
-      if (res?.data?.ok) setShares(res.data.shares)
+      if (res?.data?.ok) {
+        setShares(res.data.shares)
+        onUpdate?.({ id: moment.id, shares: res.data.shares })
+      }
     } catch {
       // share cancelled or failed — no feedback needed
     }
@@ -813,10 +863,17 @@ const GamesShowcaseSection = () => {
     keyMomentsApi.publicList()
       .then((res) => {
         if (cancelled) return
-        const items = (res?.data?.keyMoments || []).map((moment) => ({
-          ...moment,
-        }))
+        const localLiked = readLocalLikedIds()
+        const items = (res?.data?.keyMoments || []).map((moment) => {
+          // Server is authoritative; localStorage fills the gap when server can't identify user
+          const serverLiked = moment.userLiked === true
+          const localIsLiked = localLiked.has(Number(moment.id))
+          return { ...moment, userLiked: serverLiked || localIsLiked }
+        })
         setKeyMoments(items)
+        // Keep localStorage in sync with server truth
+        const serverLikedIds = new Set(items.filter((m) => m.userLiked).map((m) => Number(m.id)))
+        writeLocalLikedIds(serverLikedIds)
       })
       .catch(() => {
         if (!cancelled) setKeyMoments([])
@@ -830,31 +887,66 @@ const GamesShowcaseSection = () => {
     }
   }, [])
 
+  // Sync engagement counts back to the list so re-opening a card shows up-to-date numbers
+  const handleMomentUpdate = useCallback(({ id, views, likes, shares, userLiked }) => {
+    // Keep localStorage in sync whenever liked state changes
+    if (userLiked != null) {
+      const likedIds = readLocalLikedIds()
+      if (userLiked) likedIds.add(Number(id))
+      else likedIds.delete(Number(id))
+      writeLocalLikedIds(likedIds)
+    }
+    setKeyMoments((prev) =>
+      prev.map((m) =>
+        m.id === id
+          ? {
+              ...m,
+              ...(views != null && { views }),
+              ...(likes != null && { likes }),
+              ...(shares != null && { shares }),
+              ...(userLiked != null && { userLiked }),
+            }
+          : m,
+      ),
+    )
+    setSelectedKeyMoment((prev) =>
+      prev?.id === id
+        ? {
+            ...prev,
+            ...(views != null && { views }),
+            ...(likes != null && { likes }),
+            ...(shares != null && { shares }),
+            ...(userLiked != null && { userLiked }),
+          }
+        : prev,
+    )
+  }, [])
+
   const normalizedQuery = query.trim().toLowerCase()
   const filteredKeyMoments = keyMoments.filter((moment) => matchesSearchTerm(moment, normalizedQuery))
-  const filteredGames = games.filter((game) => matchesSearchTerm(game, normalizedQuery))
 
   return (
     <section className="games-showcase-section">
       <div className="section-inner">
-        <div className="search-bar">
-          <button className="search-btn" aria-label="Search">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-              <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2"/>
-              <path d="M16 16L20 20" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
-          </button>
-          <input
-            type="text"
-            placeholder="What are you looking for"
-            className="search-input"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-
         <div className="key-moments-block">
-          <h3 className="section-label">Key Moments</h3>
+          <div className="key-moments-header">
+            <h3 className="section-label">Key Moments</h3>
+            <div className="search-bar search-bar--inline">
+              <button className="search-btn" aria-label="Search">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2"/>
+                  <path d="M16 16L20 20" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              </button>
+              <input
+                type="text"
+                placeholder="Search key moments"
+                className="search-input"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+          </div>
           {isLoadingKeyMoments ? (
             <div className="key-moments-skeleton-row">
               {[0, 1, 2].map((i) => <div key={i} className="key-moments-skeleton-card" />)}
@@ -873,12 +965,18 @@ const GamesShowcaseSection = () => {
 
         <h3 className="section-label">Games</h3>
         <HorizontalCarousel
-          items={filteredGames}
+          items={games}
           renderCard={(item, i) => renderImgCard(item, i, setSelectedGame, false)}
         />
       </div>
       {selectedGame && <CardModal card={selectedGame} onClose={() => setSelectedGame(null)} />}
-      {selectedKeyMoment && <KeyMomentVideoModal moment={selectedKeyMoment} onClose={() => setSelectedKeyMoment(null)} />}
+      {selectedKeyMoment && (
+        <KeyMomentVideoModal
+          moment={selectedKeyMoment}
+          onClose={() => setSelectedKeyMoment(null)}
+          onUpdate={handleMomentUpdate}
+        />
+      )}
     </section>
   )
 }

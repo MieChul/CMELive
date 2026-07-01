@@ -83,3 +83,73 @@ export const DEFAULT_ENABLED_SOURCES = [
   'techcrunch', 'theverge', 'venturebeat', 'niemanlab',
   'guardian', 'fortune',
 ]
+
+/* ════════════════════════════════════════════════════════════════════════════
+   TRENDS — General world news catalog (separate from the AI/media feed above)
+   Broad global coverage: world, politics, business, tech, science, sports, etc.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+export const TRENDS_SOURCE_TIERS = [
+  { id: 'world',    label: 'Tier 1 — Global Wire & Breaking',  color: '#F2665B', desc: 'International wire services and breaking world news' },
+  { id: 'business', label: 'Tier 2 — Business & Economy',      color: '#FF8A7A', desc: 'Markets, economy, finance and corporate news' },
+  { id: 'tech',     label: 'Tier 3 — Technology & Science',    color: '#60A5FA', desc: 'Consumer tech, gadgets, research and discovery' },
+  { id: 'politics', label: 'Tier 4 — Politics & Policy',       color: '#FFB347', desc: 'Government, elections, policy and geopolitics' },
+  { id: 'sports',   label: 'Tier 5 — Sports & Live',           color: '#00E5A0', desc: 'Global sports, leagues, tournaments and results' },
+  { id: 'culture',  label: 'Tier 6 — Culture & Lifestyle',     color: '#A78BFA', desc: 'Health, science, environment, arts and society' },
+  { id: 'search',   label: 'Tier 7 — Search & Discovery (GCP)', color: '#4285F4', desc: 'Google Custom Search — broad web news discovery. Requires GOOGLE_CSE_API_KEY + GOOGLE_CSE_ID in env.' },
+]
+
+export const TRENDS_SOURCE_CATALOG = {
+  // ── Tier 1: Global Wire & Breaking ────────────────────────────────────────
+  reutersworld:    { label: 'Reuters World',          tier: 'world',    rss: 'https://feeds.reuters.com/Reuters/worldNews' },
+  bbcworld:        { label: 'BBC World',              tier: 'world',    rss: 'https://feeds.bbci.co.uk/news/world/rss.xml' },
+  aljazeera:       { label: 'Al Jazeera',             tier: 'world',    rss: 'https://www.aljazeera.com/xml/rss/all.xml' },
+  apnews:          { label: 'Associated Press',       tier: 'world',    rss: 'https://news.google.com/rss/search?q=when:1d+allinurl:apnews.com&hl=en-US&gl=US&ceid=US:en' },
+  npr:             { label: 'NPR News',               tier: 'world',    rss: 'https://feeds.npr.org/1001/rss.xml' },
+  guardianworld:   { label: 'The Guardian World',     tier: 'world',    rss: 'https://www.theguardian.com/world/rss' },
+
+  // ── Tier 2: Business & Economy ────────────────────────────────────────────
+  reutersbiz:      { label: 'Reuters Business',       tier: 'business', rss: 'https://feeds.reuters.com/reuters/businessNews' },
+  cnbcbiz:         { label: 'CNBC',                   tier: 'business', rss: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664' },
+  bbcbusiness:     { label: 'BBC Business',           tier: 'business', rss: 'https://feeds.bbci.co.uk/news/business/rss.xml' },
+  marketwatch:     { label: 'MarketWatch',            tier: 'business', rss: 'https://feeds.content.dowjones.io/public/rss/mw_topstories' },
+  economisttrends: { label: 'The Economist',          tier: 'business', rss: 'https://www.economist.com/finance-and-economics/rss.xml' },
+
+  // ── Tier 3: Technology & Science ──────────────────────────────────────────
+  bbctech:         { label: 'BBC Technology',         tier: 'tech',     rss: 'https://feeds.bbci.co.uk/news/technology/rss.xml' },
+  techcrunchtr:    { label: 'TechCrunch',             tier: 'tech',     rss: 'https://techcrunch.com/feed/' },
+  arstechnica:     { label: 'Ars Technica',           tier: 'tech',     rss: 'https://feeds.arstechnica.com/arstechnica/index' },
+  vergetr:         { label: 'The Verge',              tier: 'tech',     rss: 'https://www.theverge.com/rss/index.xml' },
+  sciencedaily:    { label: 'ScienceDaily',           tier: 'tech',     rss: 'https://www.sciencedaily.com/rss/top/science.xml' },
+
+  // ── Tier 4: Politics & Policy ─────────────────────────────────────────────
+  bbcpolitics:     { label: 'BBC Politics',           tier: 'politics', rss: 'https://feeds.bbci.co.uk/news/politics/rss.xml' },
+  politicotr:      { label: 'Politico',               tier: 'politics', rss: 'https://www.politico.com/rss/politicopicks.xml' },
+  thehill:         { label: 'The Hill',               tier: 'politics', rss: 'https://thehill.com/rss/syndicator/19110' },
+  guardianpolitics:{ label: 'The Guardian Politics',  tier: 'politics', rss: 'https://www.theguardian.com/politics/rss' },
+
+  // ── Tier 5: Sports & Live ─────────────────────────────────────────────────
+  bbcsport:        { label: 'BBC Sport',              tier: 'sports',   rss: 'https://feeds.bbci.co.uk/sport/rss.xml' },
+  espn:            { label: 'ESPN',                   tier: 'sports',   rss: 'https://www.espn.com/espn/rss/news' },
+  skysports:       { label: 'Sky Sports',             tier: 'sports',   rss: 'https://www.skysports.com/rss/12040' },
+  guardiansport:   { label: 'The Guardian Sport',     tier: 'sports',   rss: 'https://www.theguardian.com/sport/rss' },
+
+  // ── Tier 6: Culture & Lifestyle ───────────────────────────────────────────
+  bbchealth:       { label: 'BBC Health',             tier: 'culture',  rss: 'https://feeds.bbci.co.uk/news/health/rss.xml' },
+  natgeo:          { label: 'National Geographic',    tier: 'culture',  rss: 'https://www.nationalgeographic.com/pages/topic/latest-stories.rss' },
+  guardianculture: { label: 'The Guardian Culture',   tier: 'culture',  rss: 'https://www.theguardian.com/culture/rss' },
+  guardianenv:     { label: 'The Guardian Environment',tier: 'culture', rss: 'https://www.theguardian.com/environment/rss' },
+
+  // ── Tier 7: Search & Discovery (GCP) ──────────────────────────────────────
+  googlecse:       { label: 'Google Custom Search',    tier: 'search',  rss: null, apiType: 'google-cse' },
+}
+
+/** Default enabled trends sources (a balanced global starter set) */
+export const DEFAULT_TRENDS_ENABLED_SOURCES = [
+  'reutersworld', 'bbcworld', 'aljazeera', 'npr',
+  'reutersbiz', 'cnbcbiz',
+  'bbctech', 'arstechnica',
+  'bbcpolitics', 'thehill',
+  'bbcsport', 'espn',
+  'bbchealth', 'guardianculture',
+]

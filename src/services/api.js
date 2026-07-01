@@ -43,8 +43,8 @@ export const ai = {
 }
 
 export const news = {
-  list: () => api.get('/api/news'),
-  listPublic: () => api.get('/api/news/public'),
+  list: (feedType = 'ai') => api.get('/api/news', { params: { feedType } }),
+  listPublic: (feedType = 'ai') => api.get('/api/news/public', { params: { feedType } }),
   update: (id, body) => api.put(`/api/news/${id}`, body),
   remove: (id) => api.delete(`/api/news/${id}`),
   recordView: (id) => api.post(`/api/news/${id}/view`),
@@ -54,9 +54,9 @@ export const news = {
 
 export const admin = {
   runNewsAgent: (body = {}) => api.post('/api/admin/news-agent/run', body),
-  getConfig: () => api.get('/api/admin/config'),
-  updateConfig: (body) => api.put('/api/admin/config', body),
-  getSourceCatalog: () => api.get('/api/admin/source-catalog'),
+  getConfig: (feedType = 'ai') => api.get('/api/admin/config', { params: { feedType } }),
+  updateConfig: (body, feedType = 'ai') => api.put('/api/admin/config', body, { params: { feedType } }),
+  getSourceCatalog: (feedType = 'ai') => api.get('/api/admin/source-catalog', { params: { feedType } }),
   listUsers: () => api.get('/api/admin/users'),
   updateUserRole: (id, roles) => api.patch(`/api/admin/users/${id}/role`, { roles }),
 }
@@ -94,6 +94,22 @@ export const cornerOffice = {
     const form = new FormData()
     form.append('video', file)
     return api.post('/api/admin/corner-office/upload-video', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress,
+    })
+  },
+}
+
+export const uniqueBusinessStories = {
+  publicList: () => api.get('/api/unique-business-stories'),
+  adminList: () => api.get('/api/admin/unique-business-stories'),
+  create: (body) => api.post('/api/admin/unique-business-stories', body),
+  update: (id, body) => api.put(`/api/admin/unique-business-stories/${id}`, body),
+  remove: (id) => api.delete(`/api/admin/unique-business-stories/${id}`),
+  uploadImage: (file, onUploadProgress) => {
+    const form = new FormData()
+    form.append('image', file)
+    return api.post('/api/admin/unique-business-stories/upload-image', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress,
     })

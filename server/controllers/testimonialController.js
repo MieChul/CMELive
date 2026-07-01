@@ -1,4 +1,4 @@
-import { unlink, stat } from 'fs/promises'
+﻿import { unlink, stat } from 'fs/promises'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { all, get, run } from '../config/db.js'
@@ -16,7 +16,7 @@ async function deleteUploadedFile(url) {
   try {
     const s = await stat(full)
     if (s.isFile()) await unlink(full)
-  } catch { /* already gone — ignore */ }
+  } catch { /* already gone â€” ignore */ }
 }
 
 const isSafeUrl = (url) => {
@@ -90,21 +90,21 @@ function validate(body, { partial = false } = {}) {
       body.isActive === 1 ||
       body.isActive === '1' ||
       body.isActive === 'true'
-        ? 1
-        : 0
+        ? true
+        : false
   }
   return { errors, value: out }
 }
 
-/** Public — homepage CME Live tab. Active only, sorted by displayOrder. */
+/** Public â€” homepage CME Live tab. Active only, sorted by displayOrder. */
 export async function listPublicTestimonials(req, res) {
   try {
     const rows = await all(
-      `SELECT id, name, role, message, imageUrl, linkedinUrl, displayOrder, isActive,
-              createdDate, updatedDate
+      `SELECT id, name, role, message, "imageUrl", "linkedinUrl", "displayOrder", "isActive",
+              "createdDate", "updatedDate"
        FROM testimonials
-       WHERE isActive = 1
-       ORDER BY displayOrder, id DESC`,
+       WHERE "isActive" = true
+       ORDER BY "displayOrder", id DESC`,
     )
     return res.json({ ok: true, testimonials: rows.map(serialize) })
   } catch (err) {
@@ -113,14 +113,14 @@ export async function listPublicTestimonials(req, res) {
   }
 }
 
-/** Admin — list all (active + inactive). */
+/** Admin â€” list all (active + inactive). */
 export async function listAllTestimonials(req, res) {
   try {
     const rows = await all(
-      `SELECT id, name, role, message, imageUrl, linkedinUrl, displayOrder, isActive,
-              createdDate, updatedDate
+      `SELECT id, name, role, message, "imageUrl", "linkedinUrl", "displayOrder", "isActive",
+              "createdDate", "updatedDate"
        FROM testimonials
-       ORDER BY displayOrder, id DESC`,
+       ORDER BY "displayOrder", id DESC`,
     )
     return res.json({ ok: true, testimonials: rows.map(serialize) })
   } catch (err) {
@@ -138,8 +138,8 @@ export async function createTestimonial(req, res) {
     const actor = req.user?.email ?? 'admin'
     const r = await run(
       `INSERT INTO testimonials
-       (name, role, message, imageUrl, linkedinUrl, displayOrder, isActive,
-        createdDate, createdBy, updatedDate, updatedBy)
+       (name, role, message, "imageUrl", "linkedinUrl", "displayOrder", "isActive",
+        "createdDate", "createdBy", "updatedDate", "updatedBy")
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         value.name,
@@ -148,13 +148,13 @@ export async function createTestimonial(req, res) {
         value.imageUrl ?? null,
         value.linkedinUrl ?? null,
         value.displayOrder ?? 0,
-        value.isActive ?? 1,
+        value.isActive ?? true,
         now, actor, now, actor,
       ],
     )
     const row = await get(
-      `SELECT id, name, role, message, imageUrl, linkedinUrl, displayOrder, isActive,
-              createdDate, updatedDate
+      `SELECT id, name, role, message, "imageUrl", "linkedinUrl", "displayOrder", "isActive",
+              "createdDate", "updatedDate"
        FROM testimonials WHERE id = ?`,
       [r.lastInsertRowid],
     )
@@ -172,20 +172,36 @@ export async function updateTestimonial(req, res) {
   const { errors, value } = validate(req.body || {}, { partial: true })
   if (errors.length) return res.status(400).json({ error: errors.join('; ') })
 
-  const fields = Object.keys(value)
-  if (!fields.length) return res.status(400).json({ error: 'No fields to update' })
+  if (!Object.keys(value).length) return res.status(400).json({ error: 'No fields to update' })
 
   try {
-    const existing = await get('SELECT id, imageUrl FROM testimonials WHERE id = ?', [id])
+    const existing = await get('SELECT id, "imageUrl" FROM testimonials WHERE id = ?', [id])
     if (!existing) return res.status(404).json({ error: 'Testimonial not found' })
 
-    const set = fields.map((k) => `${k} = ?`).join(', ')
-    const params = fields.map((k) => value[k])
-    params.push(new Date().toISOString(), req.user?.email ?? 'admin', id)
-
     await run(
-      `UPDATE testimonials SET ${set}, updatedDate = ?, updatedBy = ? WHERE id = ?`,
-      params,
+      `UPDATE testimonials SET
+        "name"         = COALESCE(?, "name"),
+        "role"         = COALESCE(?, "role"),
+        "message"      = COALESCE(?, "message"),
+        "imageUrl"     = COALESCE(?, "imageUrl"),
+        "linkedinUrl"  = COALESCE(?, "linkedinUrl"),
+        "displayOrder" = COALESCE(?, "displayOrder"),
+        "isActive"     = COALESCE(?, "isActive"),
+        "updatedDate"  = ?,
+        "updatedBy"    = ?
+       WHERE id = ?`,
+      [
+        value.name         ?? null,
+        value.role         ?? null,
+        value.message      ?? null,
+        value.imageUrl     ?? null,
+        value.linkedinUrl  ?? null,
+        value.displayOrder ?? null,
+        value.isActive     ?? null,
+        new Date().toISOString(),
+        req.user?.email ?? 'admin',
+        id,
+      ],
     )
 
     if (Object.prototype.hasOwnProperty.call(value, 'imageUrl') && existing.imageUrl && existing.imageUrl !== value.imageUrl) {
@@ -193,8 +209,8 @@ export async function updateTestimonial(req, res) {
     }
 
     const row = await get(
-      `SELECT id, name, role, message, imageUrl, linkedinUrl, displayOrder, isActive,
-              createdDate, updatedDate
+      `SELECT id, name, role, message, "imageUrl", "linkedinUrl", "displayOrder", "isActive",
+              "createdDate", "updatedDate"
        FROM testimonials WHERE id = ?`,
       [id],
     )
@@ -209,7 +225,7 @@ export async function deleteTestimonial(req, res) {
   const id = Number(req.params.id)
   if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' })
   try {
-    const existing = await get('SELECT id, imageUrl FROM testimonials WHERE id = ?', [id])
+    const existing = await get('SELECT id, "imageUrl" FROM testimonials WHERE id = ?', [id])
     if (!existing) return res.status(404).json({ error: 'Testimonial not found' })
     await run('DELETE FROM testimonials WHERE id = ?', [id])
     await deleteUploadedFile(existing.imageUrl)
@@ -219,3 +235,4 @@ export async function deleteTestimonial(req, res) {
     return res.status(500).json({ error: 'Failed to delete testimonial' })
   }
 }
+

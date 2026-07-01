@@ -1,13 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'
-import { Search, X, ChevronDown, RefreshCw, Shield, User as UserIcon, Mail, Calendar } from 'lucide-react'
+import { Search, X, RefreshCw, Shield, ChevronDown, User as UserIcon, Mail, Calendar } from 'lucide-react'
 import { admin } from '../services/api'
 import './UserManagement.css'
-
-/* Available roles. Extend here when more roles are added on the backend. */
-const ROLE_OPTIONS = [
-  { value: 'admin', label: 'Admin' },
-]
 
 const initials = (name = '') =>
   name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() || '').join('') || '?'
@@ -18,25 +14,63 @@ const fmtDate = (iso) => {
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
-const roleSummary = (roles) =>
-  roles.length === 0 ? 'User' : roles.map((r) => ROLE_OPTIONS.find((o) => o.value === r)?.label || r).join(', ')
+const roleSummary = (roles = []) => {
+  if (Array.isArray(roles) && roles.includes('admin')) return 'Admin'
+  return 'User'
+}
 
-/* ─── Inline role dropdown (checkbox multi-select, persists on toggle) ── */
+/* ─── Inline role dropdown (pill button + checkbox panel) ── */
 function RoleDropdown({ user, onChange }) {
-  const [open, setOpen]     = useState(false)
   const [saving, setSaving] = useState(false)
-  const ref = useRef(null)
+  const [open, setOpen] = useState(false)
+  const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 })
+  const wrapRef = useRef(null)
+  const btnRef = useRef(null)
+  const panelRef = useRef(null)
+  const isAdmin = user.roles.includes('admin')
+
+  const updatePosition = () => {
+    const btn = btnRef.current
+    if (!btn) return
+    const rect = btn.getBoundingClientRect()
+    const panelW = Math.max(rect.width, 180)
+    const gap = 6
+    const viewportH = window.innerHeight
+    const estPanelH = 56
+    // Flip above when there's not enough space below.
+    const openUp = rect.bottom + gap + estPanelH > viewportH && rect.top > estPanelH + gap
+    const top = openUp ? rect.top - estPanelH - gap : rect.bottom + gap
+    let left = rect.right - panelW
+    if (left < 8) left = 8
+    if (left + panelW > window.innerWidth - 8) left = window.innerWidth - panelW - 8
+    setCoords({ top, left, width: panelW })
+  }
 
   useEffect(() => {
-    if (!open) return
-    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', close)
-    return () => document.removeEventListener('mousedown', close)
+    if (!open) return undefined
+    updatePosition()
+    const onDoc = (e) => {
+      if (wrapRef.current?.contains(e.target)) return
+      if (panelRef.current?.contains(e.target)) return
+      setOpen(false)
+    }
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false) }
+    const onScroll = () => updatePosition()
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    window.addEventListener('scroll', onScroll, true)
+    window.addEventListener('resize', onScroll)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+      window.removeEventListener('scroll', onScroll, true)
+      window.removeEventListener('resize', onScroll)
+    }
   }, [open])
 
-  const toggle = async (role) => {
+  const toggleAdmin = async () => {
     if (saving) return
-    const next = user.roles.includes(role) ? user.roles.filter((r) => r !== role) : [...user.roles, role]
+    const next = isAdmin ? [] : ['admin']
     setSaving(true)
     try {
       const { data } = await admin.updateUserRole(user.id, next)
@@ -50,10 +84,11 @@ function RoleDropdown({ user, onChange }) {
   }
 
   return (
-    <div className="um-dd" ref={ref} onClick={(e) => e.stopPropagation()}>
+    <div className="um-dd" ref={wrapRef} onClick={(e) => e.stopPropagation()}>
       <button
+        ref={btnRef}
         type="button"
-        className={`um-dd__btn ${open ? 'um-dd__btn--open' : ''} ${user.isAdmin ? 'um-dd__btn--admin' : ''}`}
+        className={`um-dd__btn ${isAdmin ? 'um-dd__btn--admin' : ''} ${open ? 'um-dd__btn--open' : ''}`}
         onClick={() => setOpen((o) => !o)}
         disabled={saving}
         aria-haspopup="listbox"
@@ -61,28 +96,30 @@ function RoleDropdown({ user, onChange }) {
       >
         {saving
           ? <RefreshCw size={13} className="spin" />
-          : (user.isAdmin && <Shield size={12} />)}
-        <span className="um-dd__label">{roleSummary(user.roles)}</span>
-        <ChevronDown size={13} />
+          : (isAdmin ? <Shield size={12} /> : <UserIcon size={12} />)}
+        <span className="um-dd__label">{isAdmin ? 'Admin' : 'User'}</span>
+        <ChevronDown size={13} className={`um-dd__chev ${open ? 'um-dd__chev--open' : ''}`} />
       </button>
-      {open && (
-        <div className="um-dd__panel" role="listbox">
-          {ROLE_OPTIONS.map((opt) => {
-            const checked = user.roles.includes(opt.value)
-            return (
-              <label key={opt.value} className={`um-dd__item ${checked ? 'um-dd__item--checked' : ''}`}>
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  disabled={saving}
-                  onChange={() => toggle(opt.value)}
-                />
-                <span className="um-dd__box" aria-hidden="true" />
-                <span>{opt.label}</span>
-              </label>
-            )
-          })}
-        </div>
+
+      {open && createPortal(
+        <div
+          ref={panelRef}
+          className="um-dd__panel um-dd__panel--floating"
+          role="listbox"
+          style={{ top: coords.top, left: coords.left, minWidth: coords.width }}
+        >
+          <label className={`um-dd__item ${isAdmin ? 'um-dd__item--checked' : ''}`}>
+            <input
+              type="checkbox"
+              checked={isAdmin}
+              onChange={toggleAdmin}
+              disabled={saving}
+            />
+            <span className="um-dd__box" aria-hidden="true" />
+            <span>Admin</span>
+          </label>
+        </div>,
+        document.body,
       )}
     </div>
   )
@@ -146,9 +183,7 @@ function UserDetailsModal({ user, onClose }) {
           </div>
         </div>
 
-        <footer className="um-modal__foot">
-          <button type="button" className="um-btn um-btn--primary" onClick={onClose}>Close</button>
-        </footer>
+        {/* Footer intentionally omitted — modal is view-only without explicit close buttons */}
       </div>
     </div>
   )

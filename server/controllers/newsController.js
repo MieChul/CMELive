@@ -29,6 +29,12 @@ function normalizeStatus(s) {
   return VALID_STATUSES.has(v) ? v : 'pending'
 }
 
+const VALID_FEED_TYPES = new Set(['ai', 'trends'])
+function normalizeFeedType(t) {
+  const v = String(t || 'ai').toLowerCase()
+  return VALID_FEED_TYPES.has(v) ? v : 'ai'
+}
+
 function parseId(raw) {
   const n = parseInt(raw, 10)
   return Number.isFinite(n) && n > 0 ? n : null
@@ -47,7 +53,7 @@ export async function postNews(req, res) {
     const {
       title, excerpt, summary, domainImperative, aiTechImperative,
       category, source, status, publishedDate,
-      url, imageUrl, imageAlt, tags, aiScore, batchId, images,
+      url, imageUrl, imageAlt, tags, aiScore, batchId, images, feedType,
     } = req.body || {}
 
     if (!title || !String(title).trim()) {
@@ -61,10 +67,10 @@ export async function postNews(req, res) {
 
     const result = await run(
       `INSERT INTO news
-         (title, excerpt, summary, domainImperative, aiTechImperative,
-          category, source, status, publishedDate,
-          url, imageUrl, imageAlt, tags, aiScore, batchId, images, createdBy, updatedBy)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'agent', 'agent')`,
+         (title, excerpt, summary, "domainImperative", "aiTechImperative",
+          category, source, status, "publishedDate",
+          url, "imageUrl", "imageAlt", tags, "aiScore", "batchId", images, "feedType", "createdBy", "updatedBy")
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'agent', 'agent')`,
       [
         clamp(title, MAX_TITLE),
         clamp(excerpt, MAX_EXCERPT),
@@ -82,6 +88,7 @@ export async function postNews(req, res) {
         score,
         clamp(batchId, 36),
         safeJsonImages(images),
+        normalizeFeedType(feedType),
       ],
     )
 
@@ -99,13 +106,17 @@ export async function postNews(req, res) {
  */
 export async function getNews(req, res) {
   try {
+    res.setHeader('Cache-Control', 'no-store')
+    const feedType = normalizeFeedType(req.query?.feedType)
     const items = await all(
-      `SELECT id, title, excerpt, summary, domainImperative, aiTechImperative,
+      `SELECT id, title, excerpt, summary, "domainImperative", "aiTechImperative",
               category, source, status,
-              url, imageUrl, imageAlt, tags, publishedDate, createdDate,
-              aiScore, batchId, images, likes, views, shares
+              url, "imageUrl", "imageAlt", tags, "publishedDate", "createdDate",
+              "aiScore", "batchId", images, likes, views, shares, "feedType"
        FROM news
-       ORDER BY aiScore DESC, id DESC`,
+       WHERE "feedType" = ?
+       ORDER BY "aiScore" DESC, id DESC`,
+      [feedType],
     )
     return res.json({ ok: true, items })
   } catch (err) {
@@ -145,12 +156,12 @@ export async function updateNews(req, res) {
     const result = await run(
       `UPDATE news
        SET title = ?, excerpt = ?, summary = ?,
-           domainImperative = ?, aiTechImperative = ?,
+           "domainImperative" = ?, "aiTechImperative" = ?,
            category = ?, source = ?,
-           status = ?, publishedDate = ?, url = ?, imageUrl = ?, imageAlt = ?, tags = ?,
-           ${score !== undefined ? 'aiScore = ?,' : ''}
+           status = ?, "publishedDate" = ?, url = ?, "imageUrl" = ?, "imageAlt" = ?, tags = ?,
+           ${score !== undefined ? '"aiScore" = ?,' : ''}
            images = ?,
-           updatedDate = ?, updatedBy = ?
+           "updatedDate" = ?, "updatedBy" = ?
        WHERE id = ?`,
       [
         clamp(title, MAX_TITLE),
@@ -214,20 +225,22 @@ export async function deleteNews(req, res) {
  */
 export async function getPublicNews(req, res) {
   try {
+    const feedType = normalizeFeedType(req.query?.feedType)
     const items = await all(
-      `SELECT id, title, excerpt, summary, domainImperative, aiTechImperative,
-              category, source, publishedDate,
-              url, imageUrl, imageAlt, tags, likes, views, shares
+      `SELECT id, title, excerpt, summary, "domainImperative", "aiTechImperative",
+              category, source, "publishedDate",
+              url, "imageUrl", "imageAlt", tags, likes, views, shares
        FROM news
-       WHERE status = 'approved'
-       ORDER BY aiScore DESC, id DESC`,
+       WHERE status = 'approved' AND "feedType" = ?
+       ORDER BY "aiScore" DESC, id DESC`,
+      [feedType],
     )
 
     if (req.user?.email) {
       const userEmail = req.user.email
       for (const item of items) {
         const liked = await get(
-          'SELECT id FROM user_likes WHERE userId = ? AND newsId = ?',
+          'SELECT id FROM user_likes WHERE "userId" = ? AND "newsId" = ?',
           [userEmail, item.id]
         )
         item.userLiked = !!liked
@@ -300,26 +313,26 @@ export async function likeNews(req, res) {
     if (userId) {
       if (unlike) {
         const alreadyLiked = await get(
-          'SELECT id FROM user_likes WHERE userId = ? AND newsId = ?',
+          'SELECT id FROM user_likes WHERE "userId" = ? AND "newsId" = ?',
           [userId, id]
         )
         if (alreadyLiked) {
-          await run('DELETE FROM user_likes WHERE userId = ? AND newsId = ?', [userId, id])
-          await run('UPDATE news SET likes = MAX(0, likes - 1) WHERE id = ?', [id])
+          await run('DELETE FROM user_likes WHERE "userId" = ? AND "newsId" = ?', [userId, id])
+          await run('UPDATE news SET likes = GREATEST(0, likes - 1) WHERE id = ?', [id])
         }
       } else {
         const alreadyLiked = await get(
-          'SELECT id FROM user_likes WHERE userId = ? AND newsId = ?',
+          'SELECT id FROM user_likes WHERE "userId" = ? AND "newsId" = ?',
           [userId, id]
         )
         if (!alreadyLiked) {
-          await run('INSERT INTO user_likes (userId, newsId) VALUES (?, ?)', [userId, id])
+          await run('INSERT INTO user_likes ("userId", "newsId") VALUES (?, ?)', [userId, id])
           await run('UPDATE news SET likes = likes + 1 WHERE id = ?', [id])
         }
       }
     } else {
       if (unlike) {
-        await run('UPDATE news SET likes = MAX(0, likes - 1) WHERE id = ?', [id])
+        await run('UPDATE news SET likes = GREATEST(0, likes - 1) WHERE id = ?', [id])
       } else {
         await run('UPDATE news SET likes = likes + 1 WHERE id = ?', [id])
       }
@@ -330,7 +343,7 @@ export async function likeNews(req, res) {
     let userLiked = false
     if (userId) {
       const liked = await get(
-        'SELECT id FROM user_likes WHERE userId = ? AND newsId = ?',
+        'SELECT id FROM user_likes WHERE "userId" = ? AND "newsId" = ?',
         [userId, id]
       )
       userLiked = !!liked

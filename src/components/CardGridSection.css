@@ -17,6 +17,49 @@
   gap: 20px;
 }
 
+/* ─── Empty state (no admin-managed stories) ─── */
+.card-grid--empty {
+  display: block;
+  min-height: 320px;
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  border-radius: 29.631px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.ubs-empty {
+  height: 100%;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 48px 24px;
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.9s cubic-bezier(0.23, 1, 0.32, 1),
+              transform 0.9s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.ubs-empty.visible {
+  opacity: 1;
+  transform: none;
+}
+
+.ubs-empty__title {
+  margin: 0 0 10px;
+  font-size: 28px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.ubs-empty__text {
+  margin: 0;
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.55);
+  max-width: 420px;
+}
+
 .grid-col-left,
 .grid-col-right {
   display: flex;
@@ -39,6 +82,21 @@
 .feature-card.visible {
   opacity: 1;
   transform: translateX(0);
+}
+
+/* ─── Rotating slot carousel — content fades as it rotates through fixed slots ─── */
+@keyframes cardSlotIn {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+.card-grid--rotating .feature-card {
+  opacity: 1;
+  transform: none;
+  transition: none;
+  animation: cardSlotIn 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-grid--rotating .feature-card { animation: none; }
 }
 
 /* ─── Fixed card heights — content never cropped ─── */
@@ -186,6 +244,42 @@
   box-shadow: 0 20px 60px rgba(0,0,0,0.5);
 }
 
+/* ─── Count-based layouts (admin-managed stories) ─── */
+
+/* Single story → one full-width hero card covering the section */
+.card-grid--single {
+  grid-template-columns: 1fr;
+}
+.card-hero {
+  height: 620px;
+}
+.card-hero .card-title {
+  font-size: clamp(36px, 5vw, 80px);
+}
+
+/* Two stories → balanced side-by-side cards */
+.card-grid--double {
+  grid-template-columns: 1fr 1fr;
+}
+.card-half {
+  height: 520px;
+}
+
+/* Three or more stories → uniform, evenly aligned grid */
+.card-grid--multi {
+  display: grid;
+  gap: 24px;
+  align-items: stretch;
+}
+.card-grid--three { grid-template-columns: repeat(3, 1fr); }
+.card-grid--four  { grid-template-columns: repeat(2, 1fr); }
+.card-grid--many  { grid-template-columns: repeat(3, 1fr); }
+.card-tile {
+  height: 360px;
+  width: 100%;
+}
+.card-grid--four .card-tile { height: 400px; }
+
 /* ─── Responsive ─── */
 @media (max-width: 1400px) {
   .card-grid { grid-template-columns: 55fr 45fr; }
@@ -198,13 +292,26 @@
   .card-wide  { height: 280px; }
   .card-small { height: 240px; }
   .card-title { line-height: 1.1; }
+  .card-hero { height: 520px; }
+  .card-half { height: 420px; }
+  .card-grid--three,
+  .card-grid--many { grid-template-columns: repeat(2, 1fr); }
+  .card-tile { height: 320px; }
 }
 
 @media (max-width: 768px) {
   .card-grid-section { padding: 40px 20px; }
   .card-grid { grid-template-columns: 1fr; }
+  .card-grid--double { grid-template-columns: 1fr; }
   .card-large { height: 420px; }
   .card-wide, .card-small { height: 280px; }
+  .card-hero { height: 400px; }
+  .card-half { height: 320px; }
+  .card-grid--three,
+  .card-grid--four,
+  .card-grid--many { grid-template-columns: 1fr; }
+  .card-tile,
+  .card-grid--four .card-tile { height: 280px; }
   .card-content { padding: 24px; }
   .card-badge { font-size: 70px; right: 20px; }
 }

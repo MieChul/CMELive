@@ -58,6 +58,34 @@
   transform: translateY(0);
 }
 
+/* Single-card variant (no cover image): content fills the whole card */
+.testimonial-card--no-image {
+  grid-template-columns: 1fr;
+}
+.testimonial-card--no-image .testimonial-content {
+  margin: 30px;
+  padding: 50px;
+}
+.testimonial-card--no-image::before {
+  background-image: none;
+  background: linear-gradient(135deg, rgba(242,102,91,0.10), rgba(120,120,160,0.08));
+}
+
+/* Horizontal scroll track for testimonials carousel */
+.testimonials-track {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.testimonials-track::-webkit-scrollbar { display: none; }
+.testimonials-track > .testimonial-card { scroll-snap-align: start; min-width: 0; }
+
 .testimonial-image {
   position: relative;
   overflow: hidden;
@@ -81,11 +109,31 @@
   background-color: rgba(50, 50, 50, 0.8);
   border-radius: 10px;
   margin: 30px 30px 30px 0;
+  max-height: 460px;
+  overflow: hidden;
 }
+
+/* Scrollable inner area so long quotes don't overflow the card */
+.testimonial-content-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+  overflow-y: auto;
+  padding-right: 8px;
+  max-height: 100%;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.25) transparent;
+}
+.testimonial-content-scroll::-webkit-scrollbar { width: 6px; }
+.testimonial-content-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.25);
+  border-radius: 3px;
+}
+.testimonial-content-scroll::-webkit-scrollbar-track { background: transparent; }
 
 .quote-wrapper {
   position: relative;
-  margin-bottom: 30px;
+  margin-bottom: 0;
 }
 
 .quote-icon {
@@ -184,10 +232,12 @@
     grid-template-columns: 1fr;
     border-radius: 30px;
   }
-  .testimonial-image { margin: 20px 20px 0; height: 300px; }
-  .testimonial-image img { min-height: auto; }
-  .testimonial-content { margin: 0 20px 20px; padding: 30px; }
+  .testimonial-image { margin: 20px 20px 0; height: 240px; }
+  .testimonial-image img { min-height: auto; height: 240px; }
+  .testimonial-content { margin: 0 20px 20px; padding: 30px; max-height: none; }
+  .testimonial-content-scroll { max-height: 360px; }
   .linkedin-link { position: relative; bottom: auto; right: auto; margin-top: 20px; align-self: flex-start; }
+  .testimonial-card--no-image .testimonial-content { margin: 20px; padding: 30px; }
 }
 
 @media (max-width: 640px) {

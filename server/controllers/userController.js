@@ -1,4 +1,4 @@
-import { all, get, run } from '../config/db.js'
+﻿import { all, get, run } from '../config/db.js'
 
 function serialize(u) {
   return {
@@ -20,8 +20,9 @@ function serialize(u) {
  */
 export async function listUsers(req, res) {
   try {
+    res.setHeader('Cache-Control', 'no-store')
     const rows = await all(
-      'SELECT id, email, displayName, profilePicUrl, ssoObjectId, isAdmin, createdDate, updatedDate FROM users ORDER BY displayName',
+      'SELECT id, email, "displayName", "profilePicUrl", "ssoObjectId", "isAdmin", "createdDate", "updatedDate" FROM users ORDER BY "displayName"',
     )
     return res.json({ ok: true, users: rows.map(serialize) })
   } catch (err) {
@@ -32,7 +33,7 @@ export async function listUsers(req, res) {
 
 /**
  * PATCH /api/admin/users/:id/role
- * Body: { roles: string[] } — currently only 'admin' is recognized.
+ * Body: { roles: string[] } â€” currently only 'admin' is recognized.
  */
 export async function updateUserRole(req, res) {
   const id = Number(req.params.id)
@@ -44,10 +45,10 @@ export async function updateUserRole(req, res) {
   if (!roles) {
     return res.status(400).json({ error: 'roles must be an array' })
   }
-  const nextIsAdmin = roles.includes('admin') ? 1 : 0
+  const nextIsAdmin = roles.includes('admin')
 
   try {
-    const target = await get('SELECT id, isAdmin FROM users WHERE id = ?', [id])
+    const target = await get('SELECT id, "isAdmin" FROM users WHERE id = ?', [id])
     if (!target) return res.status(404).json({ error: 'User not found' })
 
     // Guard: cannot demote yourself
@@ -57,7 +58,7 @@ export async function updateUserRole(req, res) {
 
     // Guard: cannot remove the last remaining admin
     if (target.isAdmin && !nextIsAdmin) {
-      const row = await get('SELECT COUNT(*) AS c FROM users WHERE isAdmin = 1')
+      const row = await get('SELECT COUNT(*) AS c FROM users WHERE "isAdmin" = true')
       const count = Number(row?.c ?? 0)
       if (count <= 1) {
         return res.status(400).json({ error: 'At least one admin must remain' })
@@ -65,11 +66,11 @@ export async function updateUserRole(req, res) {
     }
 
     await run(
-      'UPDATE users SET isAdmin = ?, updatedDate = ?, updatedBy = ? WHERE id = ?',
+      'UPDATE users SET "isAdmin" = ?, "updatedDate" = ?, "updatedBy" = ? WHERE id = ?',
       [nextIsAdmin, new Date().toISOString(), req.user?.email ?? 'admin', id],
     )
     const updated = await get(
-      'SELECT id, email, displayName, profilePicUrl, ssoObjectId, isAdmin, createdDate, updatedDate FROM users WHERE id = ?',
+      'SELECT id, email, "displayName", "profilePicUrl", "ssoObjectId", "isAdmin", "createdDate", "updatedDate" FROM users WHERE id = ?',
       [id],
     )
     return res.json({ ok: true, user: serialize(updated) })

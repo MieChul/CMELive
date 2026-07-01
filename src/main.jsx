@@ -1,6 +1,6 @@
-import { StrictMode } from 'react'
+import { StrictMode, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import './index.css'
 import { AuthProvider, useAuth } from './context/AuthContext.jsx'
@@ -19,17 +19,28 @@ import AdminPage from './pages/AdminPage.jsx'
  * ProtectedLayout above us already guarantees authentication,
  * so we only need to check the role here.
  */
+function ScrollToTop() {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [pathname])
+  return null
+}
+
 function AdminRoute() {
   const { isAdmin, loading } = useAuth()
   if (loading) return null
   return isAdmin ? <AdminPage /> : <Navigate to="/" replace />
 }
 
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
+        <ScrollToTop />
         <Toaster position="top-center" />
+        <ScrollToTop />
         <Routes>
           <Route path="/login" element={<LocalLoginPage />} />
           <Route element={<ProtectedLayout />}>

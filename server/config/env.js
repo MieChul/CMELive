@@ -56,8 +56,12 @@ const adminEmails = (process.env.ADMIN_EMAILS || '')
 // Must be at least 32 characters in production. Set via NEWS_AGENT_API_KEY env var.
 const newsAgentApiKey = (process.env.NEWS_AGENT_API_KEY || '').trim()
 
-// BYPASS_ADMIN_AUTH=true: grants admin to ALL authenticated users. Dev/testing only — remove before go-live.
+// BYPASS_ADMIN_AUTH=true: grants admin to ALL authenticated users. Dev/testing only — never set in production.
 const bypassAdminAuth = process.env.BYPASS_ADMIN_AUTH === 'true'
+if (isProduction && bypassAdminAuth) {
+  console.error('[FATAL] BYPASS_ADMIN_AUTH must not be set in production.')
+  process.exit(1)
+}
 if (isProduction && newsAgentApiKey.length > 0 && newsAgentApiKey.length < 32) {
   console.error('[FATAL] NEWS_AGENT_API_KEY must be at least 32 characters in production.')
   process.exit(1)
@@ -82,9 +86,10 @@ const agentCronExpression = (process.env.NEWS_AGENT_CRON ?? '0 8 * * *').trim()
 // NEWS_MAX_PER_RUN: max articles inserted per agent run (1-25).
 const agentMaxPerRun = Math.max(1, Math.min(Number(process.env.NEWS_MAX_PER_RUN) || 10, 25))
 
-// ENABLE_DALLE_IMAGES=true: generate an AI image per article via Imagen 3 (Vertex AI).
+// ENABLE_AI_IMAGES=true: generate an image per article via Vertex AI Imagen 3.
 //   Images cost ~$0.02 each. Off by default.
-const enableDalleImages = process.env.ENABLE_DALLE_IMAGES === 'true'
+//   ENABLE_DALLE_IMAGES accepted as a legacy alias.
+const enableDalleImages = process.env.ENABLE_AI_IMAGES === 'true' || process.env.ENABLE_DALLE_IMAGES === 'true'
 
 // Google Custom Search Engine — used by the news agent as a GCP-native article source.
 // Both vars required to enable: GOOGLE_CSE_API_KEY (GCP API key) + GOOGLE_CSE_ID (Programmable Search Engine ID / cx).
@@ -100,7 +105,7 @@ const gcsBucketName = (process.env.GCS_BUCKET_NAME || '').trim()
 // GOOGLE_VERTEX_PROJECT_ID: your GCP project ID (e.g. "my-project-123456")
 // GOOGLE_VERTEX_LOCATION:   Vertex AI region, defaults to "us-central1"
 // GOOGLE_CREDENTIALS_JSON:  full content of a GCP service account JSON key file
-//   (paste the entire JSON as a single string; Azure handles it fine)
+//   (paste the entire JSON as a single string; set via Cloud Run environment variable)
 const vertexProjectId      = (process.env.GOOGLE_VERTEX_PROJECT_ID || '').trim()
 const vertexLocation       = (process.env.GOOGLE_VERTEX_LOCATION   || 'us-central1').trim()
 const vertexCredentialsJson = (process.env.GOOGLE_CREDENTIALS_JSON || '').trim()

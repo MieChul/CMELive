@@ -1,10 +1,25 @@
 import { runNewsAgent } from '../services/newsAgentService.js'
 import { get as dbGet, run as dbRun } from '../config/db.js'
 import { config } from '../config/env.js'
-import { SOURCE_CATALOG, SOURCE_TIERS, DEFAULT_ENABLED_SOURCES } from '../data/sourceCatalog.js'
+import {
+  SOURCE_CATALOG, SOURCE_TIERS, DEFAULT_ENABLED_SOURCES,
+  TRENDS_SOURCE_CATALOG, TRENDS_SOURCE_TIERS, DEFAULT_TRENDS_ENABLED_SOURCES,
+} from '../data/sourceCatalog.js'
 import cron from 'node-cron'
 
-const isSafeUrl = (url) => /^https?:\/\/.{4,}/.test(String(url || '').trim())
+const PRIVATE_HOST_RE = /^(localhost$|127\.|0\.0\.0\.0$|::1$|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|fc[\da-f]{2}:|fd[\da-f]{2}:)/i
+
+const isSafeUrl = (rawUrl) => {
+  const url = String(rawUrl || '').trim()
+  if (!/^https?:\/\/.{4,}/.test(url)) return false
+  try {
+    const { hostname } = new URL(url)
+    if (PRIVATE_HOST_RE.test(hostname)) return false
+    return true
+  } catch {
+    return false
+  }
+}
 
 const DEFAULT_AGENT_CONFIG = {
   autoFetch: true,
@@ -19,32 +34,58 @@ const DEFAULT_AGENT_CONFIG = {
   keywords: ['artificial intelligence', 'machine learning', 'LLM', 'GPT', 'neural network', 'deep learning', 'media', 'streaming', 'adtech'],
 }
 
+const DEFAULT_TRENDS_CONFIG = {
+  autoFetch: true,
+  cronExpression: '0 8 * * *',
+  maxPerBatch: 5,
+  minAiScore: 50,
+  enableImages: false,
+  imagesPerArticle: 3,
+  enabledSources: DEFAULT_TRENDS_ENABLED_SOURCES,
+  customSources: [],
+  categories: ['World', 'Politics', 'Business', 'Technology', 'Science', 'Sports', 'Health', 'Culture'],
+  keywords: [],   // empty = no keyword gate; general world news passes through
+}
+
+// Map a feedType to its admin_config storage key + defaults
+const FEED_META = {
+  ai:     { key: 'agent_config',  defaults: DEFAULT_AGENT_CONFIG },
+  trends: { key: 'trends_config', defaults: DEFAULT_TRENDS_CONFIG },
+}
+
+function resolveFeed(req) {
+  const ft = String(req.query?.feedType ?? req.body?.feedType ?? 'ai').toLowerCase()
+  return FEED_META[ft] ? ft : 'ai'
+}
+
 const ALLOWED_CONFIG_KEYS = new Set([
   'autoFetch', 'cronExpression', 'maxPerBatch', 'minAiScore',
   'enableImages', 'imagesPerArticle', 'enabledSources', 'customSources', 'categories', 'keywords',
 ])
 
-async function readDbConfig() {
+async function readDbConfig(feedType = 'ai') {
+  const { key, defaults } = FEED_META[feedType] || FEED_META.ai
   try {
-    const row = await dbGet("SELECT value FROM admin_config WHERE key = 'agent_config'")
-    return row ? { ...DEFAULT_AGENT_CONFIG, ...JSON.parse(row.value) } : DEFAULT_AGENT_CONFIG
+    const row = await dbGet('SELECT value FROM admin_config WHERE key = ?', [key])
+    return row ? { ...defaults, ...JSON.parse(row.value) } : defaults
   } catch {
-    return DEFAULT_AGENT_CONFIG
+    return defaults
   }
 }
 
-async function writeDbConfig(value, updatedBy) {
+async function writeDbConfig(value, updatedBy, feedType = 'ai') {
+  const { key } = FEED_META[feedType] || FEED_META.ai
   const now = new Date().toISOString()
-  const existing = await dbGet("SELECT 1 AS x FROM admin_config WHERE key = 'agent_config'")
+  const existing = await dbGet('SELECT 1 AS x FROM admin_config WHERE key = ?', [key])
   if (existing) {
     await dbRun(
-      "UPDATE admin_config SET value = ?, updatedDate = ?, updatedBy = ? WHERE key = 'agent_config'",
-      [value, now, updatedBy],
+      'UPDATE admin_config SET value = ?, "updatedDate" = ?, "updatedBy" = ? WHERE key = ?',
+      [value, now, updatedBy, key],
     )
   } else {
     await dbRun(
-      "INSERT INTO admin_config (key, value, updatedDate, updatedBy) VALUES ('agent_config', ?, ?, ?)",
-      [value, now, updatedBy],
+      'INSERT INTO admin_config (key, value, "updatedDate", "updatedBy") VALUES (?, ?, ?, ?)',
+      [key, value, now, updatedBy],
     )
   }
 }
@@ -56,7 +97,8 @@ async function writeDbConfig(value, updatedBy) {
  */
 export async function triggerNewsAgent(req, res) {
   try {
-    const dbCfg = await readDbConfig()
+    const feedType = resolveFeed(req)
+    const dbCfg = await readDbConfig(feedType)
 
     // Support one-time body overrides from the confirmation modal
     const body = req.body || {}
@@ -75,11 +117,16 @@ export async function triggerNewsAgent(req, res) {
     // Persist overrides if requested
     if (saveAsDefault && Object.keys(body).length > 1) {
       const merged = { ...dbCfg, maxPerBatch: maxArticles, minAiScore, enabledSources }
-      await writeDbConfig(JSON.stringify(merged), req.user?.email ?? 'admin')
+      await writeDbConfig(JSON.stringify(merged), req.user?.email ?? 'admin', feedType)
     }
 
-    const result = await runNewsAgent({ maxArticles, minAiScore, enabledSources, enableImages: dbCfg.enableImages })
-    return res.json({ ok: true, ...result })
+    // Respond immediately — agent can take minutes (Gemini + Imagen calls per article)
+    // and Cloud Run will kill the connection if we wait for it to finish.
+    res.json({ ok: true, message: 'Agent started', feedType, maxArticles, minAiScore })
+
+    runNewsAgent({ maxArticles, minAiScore, enabledSources, enableImages: dbCfg.enableImages, feedType })
+      .then(result => console.log('[admin] news-agent complete:', result))
+      .catch(err => console.error('[admin] news-agent failed:', err?.message || err))
   } catch (err) {
     console.error('[admin] news-agent trigger failed:', err)
     return res.status(500).json({
@@ -95,7 +142,8 @@ export async function triggerNewsAgent(req, res) {
  */
 export async function getAgentConfig(req, res) {
   try {
-    const cfg = await readDbConfig()
+    res.setHeader('Cache-Control', 'no-store')
+    const cfg = await readDbConfig(resolveFeed(req))
     return res.json({ ok: true, config: cfg })
   } catch (err) {
     console.error('[admin] getAgentConfig error:', err)
@@ -109,6 +157,8 @@ export async function getAgentConfig(req, res) {
  */
 export async function updateAgentConfig(req, res) {
   try {
+    res.setHeader('Cache-Control', 'no-store')
+    const feedType = resolveFeed(req)
     const incoming = req.body || {}
     const sanitized = {}
     for (const [k, v] of Object.entries(incoming)) {
@@ -149,10 +199,10 @@ export async function updateAgentConfig(req, res) {
       }))
     }
 
-    const current = await readDbConfig()
+    const current = await readDbConfig(feedType)
     const merged = { ...current, ...sanitized }
 
-    await writeDbConfig(JSON.stringify(merged), req.user?.email ?? 'admin')
+    await writeDbConfig(JSON.stringify(merged), req.user?.email ?? 'admin', feedType)
 
     return res.json({ ok: true, config: merged })
   } catch (err) {
@@ -166,5 +216,9 @@ export async function updateAgentConfig(req, res) {
  * Returns the full source catalog + tier metadata for the frontend. Admin-only.
  */
 export async function getSourceCatalog(req, res) {
+  res.setHeader('Cache-Control', 'no-store')
+  if (resolveFeed(req) === 'trends') {
+    return res.json({ ok: true, catalog: TRENDS_SOURCE_CATALOG, tiers: TRENDS_SOURCE_TIERS })
+  }
   return res.json({ ok: true, catalog: SOURCE_CATALOG, tiers: SOURCE_TIERS })
 }

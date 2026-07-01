@@ -1,4 +1,4 @@
-import { get, run } from '../config/db.js'
+﻿import { all, get, run } from '../config/db.js'
 import { pipeline } from 'stream/promises'
 import { Readable } from 'stream'
 import {
@@ -125,10 +125,28 @@ function serializePublic(r) {
     views: r.views ?? 0,
     likes: r.likes ?? 0,
     shares: r.shares ?? 0,
+    userLiked: r.userLiked ?? false,
+  }
+}
+
+const SSRF_BLOCK_RE = /^(localhost$|127\.|0\.0\.0\.0$|::1$|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|fc[\da-f]{2}:|fd[\da-f]{2}:)/i
+
+function isPlaybackUrlSafe(url) {
+  if (!url || !/^https?:\/\//i.test(url)) return false
+  try {
+    const { hostname } = new URL(url)
+    return !SSRF_BLOCK_RE.test(hostname)
+  } catch {
+    return false
   }
 }
 
 async function streamPlaybackResponse(res, playbackUrl, rangeHeader) {
+  if (!isPlaybackUrlSafe(playbackUrl)) {
+    res.status(403).json({ error: 'Forbidden' })
+    return
+  }
+
   const headers = {}
   if (rangeHeader) headers.Range = rangeHeader
 
@@ -140,13 +158,21 @@ async function streamPlaybackResponse(res, playbackUrl, rangeHeader) {
 
   res.status(upstream.status)
 
+  const SAFE_MEDIA_TYPE = /^(video|audio|image)\//i
+  const ALLOWED_HEADERS = new Set(['content-type', 'content-length', 'content-range', 'accept-ranges', 'cache-control', 'etag', 'last-modified'])
+  let contentTypeForwarded = false
+
   for (const [key, value] of upstream.headers.entries()) {
-    if (['content-type', 'content-length', 'content-range', 'accept-ranges', 'cache-control', 'etag', 'last-modified'].includes(key.toLowerCase())) {
-      res.setHeader(key, value)
+    const keyLower = key.toLowerCase()
+    if (!ALLOWED_HEADERS.has(keyLower)) continue
+    if (keyLower === 'content-type') {
+      if (!SAFE_MEDIA_TYPE.test(value)) continue
+      contentTypeForwarded = true
     }
+    res.setHeader(key, value)
   }
 
-  if (!res.getHeader('content-type')) {
+  if (!contentTypeForwarded) {
     res.setHeader('content-type', 'video/mp4')
   }
 
@@ -169,9 +195,19 @@ export async function listKeyMoments(req, res) {
 export async function listPublicKeyMoments(req, res) {
   try {
     const rows = await listApprovedKeyMoments()
+    const userId = req.user?.email
+    let likedIds = new Set()
+    if (userId) {
+      const liked = await all('SELECT "momentId" FROM user_km_likes WHERE "userId" = ?', [userId])
+      likedIds = new Set(liked.map((r) => Number(r.momentId)))
+    }
+    // Prevent browser caching so userLiked reflects the latest DB state on every load
+    res.setHeader('Cache-Control', 'no-store')
     return res.json({
       ok: true,
-      keyMoments: rows.map((row) => serializePublic(withPlaybackPath(row, `/api/key-moments/${row.id}/playback`))),
+      keyMoments: rows.map((row) =>
+        serializePublic(withPlaybackPath({ ...row, userLiked: likedIds.has(Number(row.id)) }, `/api/key-moments/${row.id}/playback`))
+      ),
     })
   } catch (err) {
     console.error('[keyMoments] public list failed:', err)
@@ -181,8 +217,8 @@ export async function listPublicKeyMoments(req, res) {
 
 async function getPlaybackRow(id) {
   return get(
-    `SELECT id, status, s3Path, remoteVideoUrl, localVideoUrl
-       FROM keyMoments
+    `SELECT id, status, "s3Path", "remoteVideoUrl", "localVideoUrl"
+       FROM "keyMoments"
       WHERE id = ?`,
     [id],
   )
@@ -241,51 +277,78 @@ export async function fetchKeyMoments(req, res) {
   }
 }
 
+const KEY_MOMENT_FIELD_SQL = {
+  title:       'title = ?',
+  description: 'description = ?',
+  category:    'category = ?',
+  domain:      'domain = ?',
+  tags:        'tags = ?',
+}
+
+const KEY_MOMENT_FIELD_MAX = {
+  title: 500,
+  description: 8000,
+  category: 100,
+  domain: 255,
+  tags: 500,
+}
+
 export async function updateKeyMoment(req, res) {
   const id = Number(req.params.id)
   if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' })
 
   const body = req.body || {}
-  const fields = []
-  const values = []
   const errors = []
 
-  const setStr = (key, max) => {
-    if (Object.prototype.hasOwnProperty.call(body, key)) {
-      const v = body[key] == null ? '' : String(body[key])
-      if (v.length > max) errors.push(`${key} must be ${max} characters or fewer`)
-      else { fields.push(`${key} = ?`); values.push(v) }
-    }
+  const clamp = (key, max) => {
+    if (!Object.prototype.hasOwnProperty.call(body, key)) return null
+    const v = body[key] == null ? '' : String(body[key])
+    if (v.length > max) { errors.push(`${key} must be ${max} characters or fewer`); return undefined }
+    return v
   }
-  setStr('title', 500)
-  setStr('description', 8000)
-  setStr('category', 100)
-  setStr('domain', 255)
-  setStr('tags', 500)
 
+  const title       = clamp('title', 500)
+  const description = clamp('description', 8000)
+  const category    = clamp('category', 100)
+  const domain      = clamp('domain', 255)
+  const tags        = clamp('tags', 500)
+
+  let safeStatus = null, reviewedBy = null, reviewedAt = null
   if (Object.prototype.hasOwnProperty.call(body, 'status')) {
     const s = String(body.status).toLowerCase()
     if (!ALLOWED_STATUS.has(s)) errors.push('status must be pending, approved, or rejected')
-    else {
-      fields.push('status = ?'); values.push(s)
-      fields.push('reviewedBy = ?'); values.push(req.user?.email || 'admin')
-      fields.push('reviewedAt = ?'); values.push(new Date().toISOString())
-    }
+    else { safeStatus = s; reviewedBy = req.user?.email || 'admin'; reviewedAt = new Date().toISOString() }
   }
 
   if (errors.length) return res.status(400).json({ error: errors.join('; ') })
-  if (!fields.length) return res.status(400).json({ error: 'No fields to update' })
+  const hasUpdate = [title, description, category, domain, tags, safeStatus].some((v) => v !== null)
+  if (!hasUpdate) return res.status(400).json({ error: 'No fields to update' })
 
   try {
-    const existing = await get('SELECT id FROM keyMoments WHERE id = ?', [id])
+    const existing = await get('SELECT id FROM "keyMoments" WHERE id = ?', [id])
     if (!existing) return res.status(404).json({ error: 'Key moment not found' })
-    values.push(new Date().toISOString(), id)
+
     await run(
-      `UPDATE keyMoments SET ${fields.join(', ')}, updatedDate = ? WHERE id = ?`,
-      values,
+      `UPDATE "keyMoments" SET
+         title          = COALESCE(?, title),
+         description    = COALESCE(?, description),
+         category       = COALESCE(?, category),
+         domain         = COALESCE(?, domain),
+         tags           = COALESCE(?, tags),
+         status         = COALESCE(?, status),
+         "reviewedBy"   = CASE WHEN ? IS NOT NULL THEN ? ELSE "reviewedBy" END,
+         "reviewedAt"   = CASE WHEN ? IS NOT NULL THEN ? ELSE "reviewedAt" END,
+         "updatedDate"  = ?
+       WHERE id = ?`,
+      [
+        title, description, category, domain, tags, safeStatus,
+        reviewedBy, reviewedBy,
+        reviewedAt, reviewedAt,
+        new Date().toISOString(), id,
+      ],
     )
     const row = await get(
-      `SELECT * FROM keyMoments WHERE id = ?`,
+      `SELECT * FROM "keyMoments" WHERE id = ?`,
       [id],
     )
     return res.json({ ok: true, keyMoment: serialize(row) })
@@ -299,10 +362,26 @@ export async function recordKeyMomentView(req, res) {
   const id = Number(req.params.id)
   if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' })
   try {
-    const existing = await get('SELECT id FROM keyMoments WHERE id = ? AND status = ?', [id, 'approved'])
+    const existing = await get('SELECT id FROM "keyMoments" WHERE id = ? AND status = ?', [id, 'approved'])
     if (!existing) return res.status(404).json({ error: 'Key moment not found' })
-    await run('UPDATE keyMoments SET views = views + 1 WHERE id = ?', [id])
-    return res.json({ ok: true })
+
+    const userId = req.user?.email
+    if (userId) {
+      // Only count one view per user per moment.
+      const alreadyViewed = await get(
+        'SELECT id FROM user_km_views WHERE "userId" = ? AND "momentId" = ?',
+        [userId, id],
+      )
+      if (alreadyViewed) {
+        const current = await get('SELECT views FROM "keyMoments" WHERE id = ?', [id])
+        return res.json({ ok: true, counted: false, views: current?.views ?? 0 })
+      }
+      await run('INSERT INTO user_km_views ("userId", "momentId") VALUES (?, ?)', [userId, id])
+    }
+
+    await run('UPDATE "keyMoments" SET views = views + 1 WHERE id = ?', [id])
+    const updated = await get('SELECT views FROM "keyMoments" WHERE id = ?', [id])
+    return res.json({ ok: true, counted: true, views: updated?.views ?? 0 })
   } catch (err) {
     console.error('[keyMoments] recordView error:', err)
     return res.status(500).json({ error: 'Failed to record view' })
@@ -313,10 +392,10 @@ export async function recordKeyMomentShare(req, res) {
   const id = Number(req.params.id)
   if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' })
   try {
-    const existing = await get('SELECT id FROM keyMoments WHERE id = ? AND status = ?', [id, 'approved'])
+    const existing = await get('SELECT id FROM "keyMoments" WHERE id = ? AND status = ?', [id, 'approved'])
     if (!existing) return res.status(404).json({ error: 'Key moment not found' })
-    await run('UPDATE keyMoments SET shares = shares + 1 WHERE id = ?', [id])
-    const updated = await get('SELECT shares FROM keyMoments WHERE id = ?', [id])
+    await run('UPDATE "keyMoments" SET shares = shares + 1 WHERE id = ?', [id])
+    const updated = await get('SELECT shares FROM "keyMoments" WHERE id = ?', [id])
     return res.json({ ok: true, shares: updated?.shares ?? 0 })
   } catch (err) {
     console.error('[keyMoments] recordShare error:', err)
@@ -328,7 +407,7 @@ export async function likeKeyMoment(req, res) {
   const id = Number(req.params.id)
   if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' })
   try {
-    const existing = await get('SELECT id, likes FROM keyMoments WHERE id = ? AND status = ?', [id, 'approved'])
+    const existing = await get('SELECT id, likes FROM "keyMoments" WHERE id = ? AND status = ?', [id, 'approved'])
     if (!existing) return res.status(404).json({ error: 'Key moment not found' })
 
     const unlike = String(req.body?.action || '').toLowerCase() === 'unlike'
@@ -336,30 +415,30 @@ export async function likeKeyMoment(req, res) {
 
     if (userId) {
       if (unlike) {
-        const already = await get('SELECT id FROM user_km_likes WHERE userId = ? AND momentId = ?', [userId, id])
+        const already = await get('SELECT id FROM user_km_likes WHERE "userId" = ? AND "momentId" = ?', [userId, id])
         if (already) {
-          await run('DELETE FROM user_km_likes WHERE userId = ? AND momentId = ?', [userId, id])
-          await run('UPDATE keyMoments SET likes = MAX(0, likes - 1) WHERE id = ?', [id])
+          await run('DELETE FROM user_km_likes WHERE "userId" = ? AND "momentId" = ?', [userId, id])
+          await run('UPDATE "keyMoments" SET likes = GREATEST(0, likes - 1) WHERE id = ?', [id])
         }
       } else {
-        const already = await get('SELECT id FROM user_km_likes WHERE userId = ? AND momentId = ?', [userId, id])
+        const already = await get('SELECT id FROM user_km_likes WHERE "userId" = ? AND "momentId" = ?', [userId, id])
         if (!already) {
-          await run('INSERT INTO user_km_likes (userId, momentId) VALUES (?, ?)', [userId, id])
-          await run('UPDATE keyMoments SET likes = likes + 1 WHERE id = ?', [id])
+          await run('INSERT INTO user_km_likes ("userId", "momentId") VALUES (?, ?)', [userId, id])
+          await run('UPDATE "keyMoments" SET likes = likes + 1 WHERE id = ?', [id])
         }
       }
     } else {
       if (unlike) {
-        await run('UPDATE keyMoments SET likes = MAX(0, likes - 1) WHERE id = ?', [id])
+        await run('UPDATE "keyMoments" SET likes = GREATEST(0, likes - 1) WHERE id = ?', [id])
       } else {
-        await run('UPDATE keyMoments SET likes = likes + 1 WHERE id = ?', [id])
+        await run('UPDATE "keyMoments" SET likes = likes + 1 WHERE id = ?', [id])
       }
     }
 
-    const updated = await get('SELECT likes FROM keyMoments WHERE id = ?', [id])
+    const updated = await get('SELECT likes FROM "keyMoments" WHERE id = ?', [id])
     let userLiked = false
     if (userId) {
-      const liked = await get('SELECT id FROM user_km_likes WHERE userId = ? AND momentId = ?', [userId, id])
+      const liked = await get('SELECT id FROM user_km_likes WHERE "userId" = ? AND "momentId" = ?', [userId, id])
       userLiked = !!liked
     }
     return res.json({ ok: true, likes: updated?.likes ?? 0, userLiked })
@@ -373,9 +452,9 @@ export async function deleteKeyMoment(req, res) {
   const id = Number(req.params.id)
   if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' })
   try {
-    const row = await get('SELECT localVideoUrl FROM keyMoments WHERE id = ?', [id])
+    const row = await get('SELECT "localVideoUrl" FROM "keyMoments" WHERE id = ?', [id])
     if (!row) return res.status(404).json({ error: 'Key moment not found' })
-    await run('DELETE FROM keyMoments WHERE id = ?', [id])
+    await run('DELETE FROM "keyMoments" WHERE id = ?', [id])
     await deleteKeyMomentFile(row.localVideoUrl)
     return res.json({ ok: true })
   } catch (err) {
@@ -389,7 +468,7 @@ export async function diagnoseKeyMomentPlayback(req, res) {
   if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' })
   try {
     const row = await get(
-      `SELECT id, s3Path, remoteVideoUrl, localVideoUrl, status FROM keyMoments WHERE id = ?`,
+      `SELECT id, "s3Path", "remoteVideoUrl", "localVideoUrl", status FROM "keyMoments" WHERE id = ?`,
       [id],
     )
     if (!row) return res.status(404).json({ error: 'Key moment not found' })
@@ -400,3 +479,4 @@ export async function diagnoseKeyMomentPlayback(req, res) {
     return res.status(500).json({ error: err.message })
   }
 }
+

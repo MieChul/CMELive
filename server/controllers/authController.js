@@ -4,8 +4,10 @@ import { config } from '../config/env.js'
 import { get, run } from '../config/db.js'
 import { getSessionCookieOptions, getClearCookieOptions, SESSION_COOKIE_NAME } from '../config/cookies.js'
 
+const STATE_TTL_MINUTES = 10
+
 function signToken(userId) {
-  return jwt.sign({ userId }, config.jwtSecret, { expiresIn: '7d' })
+  return jwt.sign({ userId }, config.jwtSecret, { algorithm: 'HS256', expiresIn: '7d' })
 }
 
 /**
@@ -24,8 +26,6 @@ function extractAzureRoles(accessToken) {
     return []
   }
 }
-
-const stateStore = new Map()
 
 /** Generic OAuth error query – client shows a fixed user-facing message, not IdP text */
 const OAUTH_ERR_QUERY = 'signin_failed'
@@ -52,12 +52,12 @@ export async function postLocalLogin(req, res) {
       ? profilePicUrl.trim().slice(0, 500)
       : null
   // isAdmin is driven by ADMIN_EMAILS in local dev; Azure AD App Roles own this in prod.
-  const isAdmin = config.adminEmails.includes(norm) ? 1 : 0
+  const isAdmin = config.adminEmails.includes(norm)
 
   let user = await get('SELECT * FROM users WHERE email = ?', [norm])
   if (!user) {
     const r = await run(
-      `INSERT INTO users (email, displayName, profilePicUrl, isAdmin, createdBy, updatedBy)
+      `INSERT INTO users (email, "displayName", "profilePicUrl", "isAdmin", "createdBy", "updatedBy")
        VALUES (?, ?, ?, ?, 'local', 'local')`,
       [norm, cleanName, safePicUrl, isAdmin],
     )
@@ -67,7 +67,7 @@ export async function postLocalLogin(req, res) {
     // the Admin User Management UI controls roles. We no longer re-sync
     // isAdmin from ADMIN_EMAILS on every login.
     await run(
-      `UPDATE users SET profilePicUrl = COALESCE(?, profilePicUrl), updatedBy = 'local' WHERE id = ?`,
+      `UPDATE users SET "profilePicUrl" = COALESCE(?, "profilePicUrl"), "updatedBy" = 'local' WHERE id = ?`,
       [safePicUrl, user.id],
     )
     user = await get('SELECT * FROM users WHERE id = ?', [user.id])
@@ -105,14 +105,12 @@ export async function getSsoLogin(req, res) {
   }
 
   const state = crypto.randomBytes(32).toString('hex')
-  stateStore.set(state, { createdAt: Date.now() })
-
-  const tenMinutesAgo = Date.now() - 10 * 60 * 1000
-  for (const [key, value] of stateStore.entries()) {
-    if (value.createdAt < tenMinutesAgo) {
-      stateStore.delete(key)
-    }
-  }
+  await run('INSERT INTO oauth_state (state) VALUES (?)', [state])
+  // Clean up expired states opportunistically — TTL expressed as seconds to stay parameterizable
+  await run(
+    `DELETE FROM oauth_state WHERE "createdAt" < NOW() - ($1 * INTERVAL '1 minute')`,
+    [STATE_TTL_MINUTES],
+  ).catch(() => {})
 
   const params = new URLSearchParams()
   params.set('client_id', String(clientId))
@@ -139,10 +137,13 @@ export async function getSsoCallback(req, res) {
     return res.redirect(loginErrorUrl)
   }
 
-  if (!state || !stateStore.has(state)) {
-    return res.redirect(loginErrorUrl)
-  }
-  stateStore.delete(state)
+  if (!state) return res.redirect(loginErrorUrl)
+  const stateRow = await get(
+    `SELECT state FROM oauth_state WHERE state = ? AND "createdAt" > NOW() - ($2 * INTERVAL '1 minute')`,
+    [state, STATE_TTL_MINUTES],
+  ).catch(() => null)
+  if (!stateRow) return res.redirect(loginErrorUrl)
+  await run('DELETE FROM oauth_state WHERE state = ?', [state]).catch(() => {})
 
   if (!code) {
     return res.redirect(loginErrorUrl)
@@ -216,14 +217,14 @@ export async function getSsoCallback(req, res) {
 
     // Azure AD App Role OR ADMIN_EMAILS env var grants admin — ADMIN_EMAILS is a fallback
     // for when the App Role hasn't been configured in Azure AD yet.
-    const isAdmin = (roles.includes('Admin') || config.adminEmails.includes(email)) ? 1 : 0
+    const isAdmin = roles.includes('Admin') || config.adminEmails.includes(email)
 
-    let user = oid ? await get('SELECT * FROM users WHERE ssoObjectId = ?', [oid]) : null
+    let user = oid ? await get('SELECT * FROM users WHERE "ssoObjectId" = ?', [oid]) : null
     if (!user) user = await get('SELECT * FROM users WHERE email = ?', [email])
 
     if (!user) {
       const r = await run(
-        `INSERT INTO users (email, displayName, profilePicUrl, ssoObjectId, isAdmin, createdBy, updatedBy)
+        `INSERT INTO users (email, "displayName", "profilePicUrl", "ssoObjectId", "isAdmin", "createdBy", "updatedBy")
          VALUES (?, ?, ?, ?, ?, 'sso', 'sso')`,
         [email, displayName, null, oid || null, isAdmin],
       )
@@ -233,8 +234,8 @@ export async function getSsoCallback(req, res) {
       // the Admin User Management UI controls roles. We no longer re-sync
       // isAdmin from Azure AD App Roles or ADMIN_EMAILS on every login.
       await run(
-        `UPDATE users SET displayName = COALESCE(?, displayName),
-         ssoObjectId = COALESCE(?, ssoObjectId), updatedBy = 'sso' WHERE id = ?`,
+        `UPDATE users SET "displayName" = COALESCE(?, "displayName"),
+         "ssoObjectId" = COALESCE(?, "ssoObjectId"), "updatedBy" = 'sso' WHERE id = ?`,
         [displayName, oid, user.id],
       )
       user = await get('SELECT * FROM users WHERE id = ?', [user.id])
@@ -264,6 +265,7 @@ export async function getSsoStatus(req, res) {
 
 export async function getMe(req, res) {
   if (!req.user) return res.status(401).json({ error: 'Unauthorized' })
+  res.setHeader('Cache-Control', 'no-store')
   return res.json({ user: serializeUser(req.user) })
 }
 

@@ -17,14 +17,14 @@ const BORDER_PALETTE = [
   'rgba(0, 229, 160, 0.3)',
 ]
 
-const VISIBLE = 3
-
 const CornerOfficeSection = () => {
   const sectionRef = useRef(null)
+  const scrollerRef = useRef(null)
   const [isVisible, setIsVisible] = useState(false)
   const [conversations, setConversations] = useState([])
   const [activeVideo, setActiveVideo] = useState(null)
-  const [carouselIdx, setCarouselIdx] = useState(0)
+  const [canScrollPrev, setCanScrollPrev] = useState(false)
+  const [canScrollNext, setCanScrollNext] = useState(false)
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -64,6 +64,59 @@ const CornerOfficeSection = () => {
     return () => { cancelled = true }
   }, [])
 
+  // Track whether the scroller can scroll left / right.
+  useEffect(() => {
+    const el = scrollerRef.current
+    if (!el) return
+    const update = () => {
+      const { scrollLeft, scrollWidth, clientWidth } = el
+      setCanScrollPrev(scrollLeft > 4)
+      setCanScrollNext(scrollLeft + clientWidth < scrollWidth - 4)
+    }
+    update()
+    el.addEventListener('scroll', update, { passive: true })
+    window.addEventListener('resize', update)
+    return () => {
+      el.removeEventListener('scroll', update)
+      window.removeEventListener('resize', update)
+    }
+  }, [conversations])
+
+  const scrollByCard = (delta) => {
+    const el = scrollerRef.current
+    if (!el) return
+    const firstCard = el.querySelector('.conversation-card')
+    const cardWidth = firstCard ? firstCard.getBoundingClientRect().width : el.clientWidth * 0.9
+    const gap = 30
+    el.scrollBy({ left: delta * (cardWidth + gap), behavior: 'smooth' })
+  }
+
+  // Auto-advance carousel when the section appears on screen.
+  useEffect(() => {
+    if (!isVisible) return undefined
+    const el = scrollerRef.current
+    if (!el) return undefined
+    if (conversations.length <= 1) return undefined
+
+    const gap = 30
+    const iv = setInterval(() => {
+      if (!el) return
+      const { scrollLeft, scrollWidth, clientWidth } = el
+      const firstCard = el.querySelector('.conversation-card')
+      const cardWidth = firstCard ? firstCard.getBoundingClientRect().width : el.clientWidth * 0.9
+      const scrollAmount = cardWidth + gap
+
+      // If we're at (or near) the end, wrap to start
+      if (scrollLeft + clientWidth >= scrollWidth - 4) {
+        el.scrollTo({ left: 0, behavior: 'smooth' })
+      } else {
+        el.scrollBy({ left: scrollAmount, behavior: 'smooth' })
+      }
+    }, 4500)
+
+    return () => clearInterval(iv)
+  }, [isVisible, conversations])
+
   if (conversations.length === 0) {
     return (
       <section className="corner-office-section" ref={sectionRef}>
@@ -78,14 +131,7 @@ const CornerOfficeSection = () => {
   }
 
   const total = conversations.length
-  const isCarousel = total > VISIBLE
-  const visibleCards = isCarousel
-    ? Array.from({ length: VISIBLE }, (_, k) => conversations[(carouselIdx + k) % total])
-    : conversations
-
-  const step = (delta) => {
-    setCarouselIdx((i) => ((i + delta) % total + total) % total)
-  }
+  const showArrows = total > 1
 
   return (
     <section className="corner-office-section" ref={sectionRef}>
@@ -95,25 +141,25 @@ const CornerOfficeSection = () => {
           <h2 className="corner-title">Conversations</h2>
         </div>
 
-        <div className={`conversations-wrap ${isCarousel ? 'conversations-wrap--carousel' : ''}`}>
-          {isCarousel && (
+        <div className={`conversations-wrap ${showArrows ? 'conversations-wrap--carousel' : ''}`}>
+          {showArrows && canScrollPrev && (
             <button
               type="button"
               className="carousel-arrow carousel-arrow--prev"
-              onClick={() => step(-1)}
+              onClick={() => scrollByCard(-1)}
               aria-label="Previous conversations"
             >
               <ChevronLeft size={24} />
             </button>
           )}
 
-          <div className="conversations-grid">
-            {visibleCards.map((conv, index) => {
+          <div className="conversations-grid" ref={scrollerRef}>
+            {conversations.map((conv, index) => {
               const titleWords = conv.title.split(' ').filter(Boolean)
               const playable = Boolean(conv.video)
               return (
                 <div
-                  key={`${conv.id}-${carouselIdx}-${index}`}
+                  key={conv.id}
                   className={`conversation-card ${isVisible ? 'visible' : ''}`}
                   style={{
                     borderColor: conv.borderColor,
@@ -157,33 +203,17 @@ const CornerOfficeSection = () => {
             })}
           </div>
 
-          {isCarousel && (
+          {showArrows && canScrollNext && (
             <button
               type="button"
               className="carousel-arrow carousel-arrow--next"
-              onClick={() => step(1)}
+              onClick={() => scrollByCard(1)}
               aria-label="Next conversations"
             >
               <ChevronRight size={24} />
             </button>
           )}
         </div>
-
-        {isCarousel && (
-          <div className="carousel-dots" role="tablist" aria-label="Carousel pagination">
-            {conversations.map((_, i) => (
-              <button
-                key={i}
-                type="button"
-                className={`carousel-dot ${i === carouselIdx ? 'carousel-dot--active' : ''}`}
-                onClick={() => setCarouselIdx(i)}
-                aria-label={`Go to slide ${i + 1}`}
-                aria-selected={i === carouselIdx}
-                role="tab"
-              />
-            ))}
-          </div>
-        )}
       </div>
 
       {activeVideo && (

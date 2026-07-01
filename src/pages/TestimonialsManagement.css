@@ -467,10 +467,93 @@
   background: rgba(255,255,255,0.012);
 }
 
-/* ── Responsive ──────────────────────────────────────────────────────── */
-@media (max-width: 720px) {
-  .tm-search { min-width: 0; width: 100%; }
-  .tm-toolbar { width: 100%; }
+/* ── Responsive — Tablet (≤1100px) ──────────────────────────────────── */
+@media (max-width: 1100px) {
+  /* Toolbar wraps: search takes full row, buttons sit in a row below */
+  .tm-toolbar {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 10px;
+    width: 100%;
+  }
+  .tm-search {
+    grid-column: 1 / -1;   /* full width on its own row */
+    min-width: 0;
+  }
+
+  /* Grid: 2-col max on tablet */
+  .tm-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    max-height: none;
+    overflow-y: visible;
+    padding-right: 0;
+  }
+}
+
+/* ── Responsive — Mobile (≤768px) ────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Section header */
+  .adm-section__top {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  /* Toolbar: 1 col search + side-by-side action buttons */
+  .tm-toolbar {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .tm-search { grid-column: 1 / -1; }
+
+  /* Single-column card grid — keep it scrollable inside the page on mobile */
+  .tm-grid {
+    grid-template-columns: 1fr;
+    max-height: calc(100dvh - 240px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-right: 4px;
+  }
+
+  /* Card action buttons — equal width, feel intentional */
+  .tm-card__actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+  }
+  .tm-card__actions .tm-btn {
+    justify-content: center;
+    padding: 9px 6px;
+    font-size: 11px;
+  }
+
+  /* Form modal */
+  .tm-modal__backdrop { padding: 12px; }
+  .tm-modal { max-height: calc(100dvh - 24px); }
+  .tm-form { padding: 14px 16px; gap: 12px; }
+  .tm-modal__head { padding: 14px 16px; }
+  .tm-modal__foot { padding: 12px 16px; }
+
+  /* Media upload row: stack avatar above upload controls */
+  .tm-form__row--media {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .tm-avatar--lg { width: 72px; height: 72px; font-size: 18px; }
+
+  /* Two-col row inside form → single column */
   .tm-form__row--two { flex-direction: column; }
+}
+
+/* ── Responsive — Small phones (≤480px) ─────────────────────────────── */
+@media (max-width: 480px) {
+  /* 2-col: hide/show + edit share a row, delete is full-width */
+  .tm-card__actions {
+    grid-template-columns: 1fr 1fr;
+  }
+  .tm-card__actions .tm-btn:last-child {
+    grid-column: 1 / -1;
+  }
 }
 

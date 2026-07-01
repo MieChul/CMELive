@@ -1,5 +1,3 @@
-import { sqliteDateTimeAsUtcIso } from './dates.js'
-
 /**
  * @param {object} s
  * @param {string} [nowIso]
@@ -9,7 +7,7 @@ export function isSurveyActive(s, nowIso = new Date().toISOString()) {
 
   const t = (v) => {
     if (v == null || v === '') return null
-    const ms = new Date(sqliteDateTimeAsUtcIso(v)).getTime()
+    const ms = v instanceof Date ? v.getTime() : new Date(String(v)).getTime()
     return Number.isNaN(ms) ? null : ms
   }
 

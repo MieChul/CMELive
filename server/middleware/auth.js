@@ -15,8 +15,8 @@ export async function requireAuth(req, res, next) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
   try {
-    const payload = jwt.verify(token, config.jwtSecret)
-    const user = await get('SELECT * FROM users WHERE id = ?', [payload.userId])
+    const payload = jwt.verify(token, config.jwtSecret, { algorithms: ['HS256'] })
+    const user = await get('SELECT id, email, "displayName", "isAdmin", "createdDate" FROM users WHERE id = ?', [payload.userId])
     if (!user) return res.status(401).json({ error: 'User not found' })
     req.user = user
     next()
@@ -33,8 +33,8 @@ export async function requireAdmin(req, res, next) {
   const token = req.cookies?.[SESSION_COOKIE_NAME]
   if (!token) return res.status(401).json({ error: 'Unauthorized' })
   try {
-    const payload = jwt.verify(token, config.jwtSecret)
-    const user = await get('SELECT * FROM users WHERE id = ?', [payload.userId])
+    const payload = jwt.verify(token, config.jwtSecret, { algorithms: ['HS256'] })
+    const user = await get('SELECT id, email, "displayName", "isAdmin", "createdDate" FROM users WHERE id = ?', [payload.userId])
     if (!user) return res.status(401).json({ error: 'Unauthorized' })
     if (!config.bypassAdminAuth && !user.isAdmin) return res.status(403).json({ error: 'Forbidden' })
     req.user = user
@@ -80,8 +80,8 @@ export async function optionalAuth(req, res, next) {
   const token = req.cookies?.[SESSION_COOKIE_NAME]
   if (!token) return next()
   try {
-    const payload = jwt.verify(token, config.jwtSecret)
-    const user = await get('SELECT * FROM users WHERE id = ?', [payload.userId])
+    const payload = jwt.verify(token, config.jwtSecret, { algorithms: ['HS256'] })
+    const user = await get('SELECT id, email, "displayName", "isAdmin", "createdDate" FROM users WHERE id = ?', [payload.userId])
     if (user) req.user = user
   } catch {
     // ignore

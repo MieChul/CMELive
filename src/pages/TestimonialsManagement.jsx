@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { testimonials as testimonialsApi } from '../services/api'
+import ConfirmDialog from '../components/ConfirmDialog'
 import './TestimonialsManagement.css'
 
 const EMPTY_FORM = {
@@ -24,7 +25,7 @@ function fileToInitial(name) {
   return parts.map((p) => p[0]).join('').toUpperCase()
 }
 
-function TestimonialFormModal({ initial, onClose, onSaved }) {
+function TestimonialFormModal({ initial, onClose, onSaved, existingItems = [] }) {
   const isEdit = Boolean(initial?.id)
   const [form, setForm] = useState(() => ({ ...EMPTY_FORM, ...(initial || {}) }))
   const [saving, setSaving] = useState(false)
@@ -60,9 +61,35 @@ function TestimonialFormModal({ initial, onClose, onSaved }) {
   const onSubmit = async (e) => {
     e.preventDefault()
     if (!form.name.trim() || !form.message.trim()) {
-      toast.error('Name and message are required')
+      toast.error('Client name and message are required')
       return
     }
+    
+    // Validate image URL — accept absolute URLs, server-relative paths
+    // (e.g. "/uploads/xxx.png") and protocol-relative URLs.
+    if (form.imageUrl?.trim()) {
+      const v = form.imageUrl.trim()
+      const isRelative = v.startsWith('/') || v.startsWith('./') || v.startsWith('../')
+      if (!isRelative) {
+        try {
+          new URL(v)
+        } catch {
+          toast.error('Please enter a valid image URL')
+          return
+        }
+      }
+    }
+
+    // Check display order uniqueness
+    const displayOrderNum = Number(form.displayOrder)
+    const isDuplicate = existingItems.some((item) =>
+      item.id !== initial?.id && Number(item.displayOrder) === displayOrderNum
+    )
+    if (isDuplicate) {
+      toast.error('Display order must be unique. This number is already in use.')
+      return
+    }
+
     setSaving(true)
     try {
       const payload = {
@@ -71,7 +98,7 @@ function TestimonialFormModal({ initial, onClose, onSaved }) {
         message: form.message.trim(),
         imageUrl: form.imageUrl?.trim() || null,
         linkedinUrl: form.linkedinUrl?.trim() || null,
-        displayOrder: Number(form.displayOrder) || 0,
+        displayOrder: displayOrderNum || 0,
         isActive: !!form.isActive,
       }
       const { data } = isEdit
@@ -135,25 +162,25 @@ function TestimonialFormModal({ initial, onClose, onSaved }) {
           </div>
 
           <label className="tm-field">
-            <span>Name <em>*</em></span>
+            <span>Client Name <em>*</em></span>
             <input
               type="text"
               maxLength={255}
               value={form.name}
               onChange={(e) => set('name', e.target.value)}
-              placeholder="Phil Wiser"
+              placeholder="Enter client's name"
               required
             />
           </label>
 
           <label className="tm-field">
-            <span>Role / Company</span>
+            <span>Client Role / Company</span>
             <input
               type="text"
               maxLength={255}
               value={form.role}
               onChange={(e) => set('role', e.target.value)}
-              placeholder="CTO, Paramount"
+              placeholder="Enter client's role or company "
             />
           </label>
 
@@ -164,7 +191,7 @@ function TestimonialFormModal({ initial, onClose, onSaved }) {
               maxLength={4000}
               value={form.message}
               onChange={(e) => set('message', e.target.value)}
-              placeholder="What does the client say about CME Live?"
+              placeholder="What does the client say ?"
               required
             />
             <small className="tm-counter">{form.message.length}/4000</small>
@@ -225,8 +252,9 @@ export default function TestimonialsManagement() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [editing, setEditing] = useState(null)   // testimonial object or {} for new
+  const [editing, setEditing] = useState(null)
   const [query, setQuery] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -271,10 +299,10 @@ export default function TestimonialsManagement() {
   }
 
   const onDelete = async (item) => {
-    if (!window.confirm(`Delete testimonial from ${item.name}? This cannot be undone.`)) return
     try {
       await testimonialsApi.remove(item.id)
       setItems((prev) => prev.filter((t) => t.id !== item.id))
+      setConfirmDelete(null)
       toast.success('Testimonial deleted')
     } catch (err) {
       toast.error(err.response?.data?.error || 'Delete failed')
@@ -369,7 +397,7 @@ export default function TestimonialsManagement() {
                 <button type="button" className="tm-btn tm-btn--ghost" onClick={() => setEditing(t)}>
                   <Pencil size={14} /> Edit
                 </button>
-                <button type="button" className="tm-btn tm-btn--danger" onClick={() => onDelete(t)}>
+                <button type="button" className="tm-btn tm-btn--danger" onClick={() => setConfirmDelete(t)}>
                   <Trash2 size={14} /> Delete
                 </button>
               </div>
@@ -383,6 +411,19 @@ export default function TestimonialsManagement() {
           initial={editing}
           onClose={() => setEditing(null)}
           onSaved={onSaved}
+          existingItems={items}
+        />
+      )}
+
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Delete Testimonial"
+          message={`Delete ${confirmDelete.name}'s testimonial? This cannot be undone.`}
+          confirmText="Delete"
+          cancelText="Cancel"
+          isDanger={true}
+          onConfirm={() => onDelete(confirmDelete)}
+          onCancel={() => setConfirmDelete(null)}
         />
       )}
     </section>

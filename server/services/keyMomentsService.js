@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Key Moments ingestion service.
  *
  * Pulls a list of clips from the Mission: AI Possible metadata endpoint,
@@ -247,7 +247,7 @@ export async function resolveKeyMomentPlaybackUrl(moment) {
     return moment.remoteVideoUrl
   }
 
-  console.warn(`[keyMoments] no presigned or remote URL for moment id=${moment?.id}, s3Path=${moment?.s3Path} — fallback to candidate URLs`)
+  console.warn(`[keyMoments] no presigned or remote URL for moment id=${moment?.id}, s3Path=${moment?.s3Path} â€” fallback to candidate URLs`)
   const candidates = buildCandidateVideoUrls(videoBaseUrl, moment?.s3Path)
   return candidates[0] || ''
 }
@@ -269,7 +269,7 @@ export async function diagnosePlayback(moment) {
     result.resolvedUrl = moment.localVideoUrl
     return result
   }
-  result.steps.push({ step: 'localVideoUrl', value: null, note: 'Not available — video not downloaded during ingest' })
+  result.steps.push({ step: 'localVideoUrl', value: null, note: 'Not available â€” video not downloaded during ingest' })
 
   // Step 2: presigned URL
   const { videoBaseUrl, apiKey } = getKeyMomentsConfig()
@@ -296,7 +296,7 @@ export async function diagnosePlayback(moment) {
       })
       if (res.ok) {
         const extracted = extractPlaybackUrl(text)
-        result.steps.push({ step: 'extractPlaybackUrl', extractedUrl: extracted || 'EMPTY — could not parse URL from response' })
+        result.steps.push({ step: 'extractPlaybackUrl', extractedUrl: extracted || 'EMPTY â€” could not parse URL from response' })
         if (extracted) {
           // Test if the URL actually works
           try {
@@ -332,8 +332,8 @@ export async function diagnosePlayback(moment) {
 
 /**
  * Two-phase ingest:
- *   Phase 1 — fetch metadata list, insert new rows (deduped by externalId), status=pending.
- *   Phase 2 — for each newly inserted row, download video from S3 and UPDATE localVideoUrl.
+ *   Phase 1 â€” fetch metadata list, insert new rows (deduped by externalId), status=pending.
+ *   Phase 2 â€” for each newly inserted row, download video from S3 and UPDATE localVideoUrl.
  *
  * @param {{ limit?: number, force?: boolean }} [options]
  * @returns {Promise<{fetched:number, inserted:number, downloaded:number, skippedVideo:number, skipped:number, failed:number, errors:string[]}>}
@@ -346,7 +346,7 @@ export async function runKeyMomentsIngest({ limit = 25, force = false } = {}) {
 
   ensureDir(assetsDir)
 
-  // ── Phase 1: fetch metadata, insert new rows ─────────────────────────────
+  // â”€â”€ Phase 1: fetch metadata, insert new rows â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const fetchHeaders = {}
   if (apiKey) fetchHeaders['x-api-key'] = apiKey
   const res = await fetch(metadataUrl, { headers: fetchHeaders })
@@ -369,15 +369,15 @@ export async function runKeyMomentsIngest({ limit = 25, force = false } = {}) {
       }
 
       if (!force && clip.externalId) {
-        const existing = await get('SELECT id FROM keyMoments WHERE externalId = ?', [clip.externalId])
+        const existing = await get('SELECT id FROM "keyMoments" WHERE "externalId" = ?', [clip.externalId])
         if (existing) { summary.skipped++; continue }
       }
 
       const result = await run(
-        `INSERT INTO keyMoments
-          (externalId, title, description, category, domain, tags, thumbnailUrl, s3Path,
-           remoteVideoUrl, localVideoUrl, durationSeconds, capturedAt, rawMetadata,
-           status, fetchedAt, createdDate, updatedDate)
+        `INSERT INTO "keyMoments"
+          ("externalId", title, description, category, domain, tags, "thumbnailUrl", "s3Path",
+           "remoteVideoUrl", "localVideoUrl", "durationSeconds", "capturedAt", "rawMetadata",
+           status, "fetchedAt", "createdDate", "updatedDate")
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`,
         [
           clip.externalId,
@@ -388,8 +388,8 @@ export async function runKeyMomentsIngest({ limit = 25, force = false } = {}) {
           clip.tags,
           clip.thumbnailUrl,
           clip.s3Path,
-          '',    // remoteVideoUrl — filled in phase 2
-          null,  // localVideoUrl  — filled in phase 2
+          '',    // remoteVideoUrl â€” filled in phase 2
+          null,  // localVideoUrl  â€” filled in phase 2
           clip.durationSeconds,
           clip.capturedAt,
           JSON.stringify(raw).slice(0, 20000),
@@ -404,7 +404,7 @@ export async function runKeyMomentsIngest({ limit = 25, force = false } = {}) {
     }
   }
 
-  // ── Phase 2: download video for each newly inserted row ──────────────────
+  // â”€â”€ Phase 2: download video for each newly inserted row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   for (const { id, s3Path } of newRows) {
     try {
       const presignedUrl = await requestPresignedVideoUrl(videoBase, s3Path, apiKey)
@@ -415,7 +415,7 @@ export async function runKeyMomentsIngest({ limit = 25, force = false } = {}) {
       const download = await tryDownloadVideo(candidateUrls, dest)
 
       await run(
-        `UPDATE keyMoments SET remoteVideoUrl = ?, localVideoUrl = ?, updatedDate = ? WHERE id = ?`,
+        `UPDATE "keyMoments" SET "remoteVideoUrl" = ?, "localVideoUrl" = ?, "updatedDate" = ? WHERE id = ?`,
         [download.url, download.ok ? `/uploads/key-moments/${filename}` : null, new Date().toISOString(), id],
       )
 
@@ -445,26 +445,27 @@ export async function deleteKeyMomentFile(localVideoUrl) {
   try {
     const s = await stat(full)
     if (s.isFile()) await unlink(full)
-  } catch { /* file already gone — ignore */ }
+  } catch { /* file already gone â€” ignore */ }
 }
 
 export async function listAllKeyMoments() {
   return all(
-    `SELECT id, externalId, title, description, category, domain, tags, thumbnailUrl,
-            s3Path, remoteVideoUrl, localVideoUrl, durationSeconds, capturedAt, rawMetadata,
-            status, reviewedBy, reviewedAt, fetchedAt, views, likes, shares, createdDate, updatedDate
-       FROM keyMoments
-      ORDER BY fetchedAt DESC, id DESC`,
+    `SELECT id, "externalId", title, description, category, domain, tags, "thumbnailUrl",
+            "s3Path", "remoteVideoUrl", "localVideoUrl", "durationSeconds", "capturedAt", "rawMetadata",
+            status, "reviewedBy", "reviewedAt", "fetchedAt", views, likes, shares, "createdDate", "updatedDate"
+       FROM "keyMoments"
+      ORDER BY "fetchedAt" DESC, id DESC`,
   )
 }
 
 export async function listApprovedKeyMoments() {
   return all(
-    `SELECT id, externalId, title, description, category, domain, tags, thumbnailUrl,
-            s3Path, remoteVideoUrl, localVideoUrl, durationSeconds, capturedAt, rawMetadata,
-            status, fetchedAt, views, likes, shares, createdDate, updatedDate
-       FROM keyMoments
+    `SELECT id, "externalId", title, description, category, domain, tags, "thumbnailUrl",
+            "s3Path", "remoteVideoUrl", "localVideoUrl", "durationSeconds", "capturedAt", "rawMetadata",
+            status, "fetchedAt", views, likes, shares, "createdDate", "updatedDate"
+       FROM "keyMoments"
       WHERE status = 'approved'
-      ORDER BY fetchedAt DESC, id DESC`,
+      ORDER BY "fetchedAt" DESC, id DESC`,
   )
 }
+

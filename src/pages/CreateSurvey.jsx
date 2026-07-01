@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect, Fragment } from 'react'
 import { useNavigate, Navigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
@@ -130,20 +130,19 @@ function CreateSurvey() {
     uq(id, { questionType: type, options: defaults.options })
   }
 
-  const handleHeaderImageUpload = (file) => {
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = e => {
-      setImageUrl(e.target.result)
-      markDirty()
-    }
-    reader.readAsDataURL(file)
-  }
-
   const onUpload = async (e) => {
     const f = e.target.files?.[0]
     if (!f) return
-    handleHeaderImageUpload(f)
+    setUploading(true)
+    try {
+      const { data } = await surveys.uploadImage(f)
+      setImageUrl(data.imageUrl)
+      markDirty()
+    } catch {
+      toast.error('Image upload failed')
+    } finally {
+      setUploading(false)
+    }
   }
 
   const runReview = useCallback(async () => {
@@ -498,11 +497,10 @@ function CreateSurvey() {
                             setQuestions((prev) =>
                               prev.map((x) =>
                                 x.localId === q.localId
-                                  ? { ...x, questionText: s.rephrasedQuestion, aiSuggestionJson: undefined, aiConfidenceScore: undefined }
+                                  ? { ...x, questionText: s.rephrasedQuestion, aiSuggestionJson: null, aiConfidenceScore: 85 }
                                   : x
                               )
                             )
-                            markDirty()
                           }}
                         >
                           <Check size={14} />
@@ -585,8 +583,20 @@ function QuestionCard({
   onClick, onChange, onChangeType, onDuplicate, onDelete, onMoveUp, onMoveDown
 }) {
   const [typePicker, setTypePicker] = useState(false)
+  const typePickerRef = useRef()
   const typeInfo = getTypeInfo(question.questionType)
   const TypeIcon = typeInfo.icon
+
+  useEffect(() => {
+    if (!typePicker) return
+    const close = (e) => {
+      if (typePickerRef.current && !typePickerRef.current.contains(e.target)) {
+        setTypePicker(false)
+      }
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [typePicker])
 
   return (
     <div
@@ -604,38 +614,39 @@ function QuestionCard({
             onClick={(e) => e.stopPropagation()}
           />
         </div>
-        
+
         {isActive && (
-          <div className="cs-q__type-picker" onClick={(e) => e.stopPropagation()}>
+          <div className="cs-q__type-picker" ref={typePickerRef} onClick={(e) => e.stopPropagation()}>
             <button
-              className="cs-q__type-btn"
+              className={`cs-q__type-btn ${typePicker ? 'cs-q__type-btn--open' : ''}`}
               onClick={() => setTypePicker(!typePicker)}
             >
-              <TypeIcon size={14} />
+              <TypeIcon size={15} />
               <span>{typeInfo.label}</span>
-              <ChevronDown size={12} />
+              <ChevronDown size={12} className={`cs-q__type-chevron ${typePicker ? 'cs-q__type-chevron--up' : ''}`} />
             </button>
             {typePicker && (
               <div className="cs-q__type-menu">
-                {TYPE_GROUPS.map(group => (
-                  <div key={group.label} className="cs-q__type-group">
-                    <div className="cs-q__type-group-label">{group.label}</div>
-                    {group.types.map(tid => {
-                      const t = getTypeInfo(tid)
-                      const Icon = t.icon
-                      return (
-                        <button
-                          key={tid}
-                          className={`cs-q__type-option ${question.questionType === tid ? 'cs-q__type-option--active' : ''}`}
-                          onClick={() => { onChangeType(tid); setTypePicker(false) }}
-                        >
-                          <Icon size={14} />
-                          <span>{t.label}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                ))}
+                {QUESTION_TYPES.map((t, idx) => {
+                  const Icon = t.icon
+                  const isNewGroup = idx > 0 && QUESTION_TYPES[idx - 1].group !== t.group
+                  const isSelected = question.questionType === t.value
+                  return (
+                    <Fragment key={t.value}>
+                      {isNewGroup && <div className="cs-q__type-divider" />}
+                      <button
+                        className={`cs-q__type-option ${isSelected ? 'cs-q__type-option--active' : ''}`}
+                        onClick={() => { onChangeType(t.value); setTypePicker(false) }}
+                      >
+                        <div className="cs-q__type-option-icon">
+                          <Icon size={16} />
+                        </div>
+                        <span>{t.label}</span>
+                        {isSelected && <Check size={14} className="cs-q__type-check" />}
+                      </button>
+                    </Fragment>
+                  )
+                })}
               </div>
             )}
           </div>

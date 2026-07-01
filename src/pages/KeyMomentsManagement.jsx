@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  RefreshCw, Play, Search, X, CheckCircle, XCircle, Trash2, Pencil,
+  RefreshCw, Play, Search, X, CheckCircle, XCircle, Pencil,
   Film, Clock, ExternalLink, Eye, Heart, Share2,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { keyMoments as keyMomentsApi } from '../services/api'
+// Delete action removed for Key Moments per request
 import '../pages/TestimonialsManagement.css'
 import './KeyMomentsManagement.css'
 
@@ -187,10 +188,6 @@ function KeyMomentDrawer({ item, onClose, onSaved, onStatusChange, onDelete }) {
         <div className="km-drawer__foot">
           {!editMode ? (
             <>
-              <button type="button" className="km-btn km-btn--ghost"
-                onClick={() => onDelete(item)}>
-                <Trash2 size={14} /> Delete
-              </button>
               <span style={{ flex: 1 }} />
               {item.status !== 'rejected' && (
                 <button type="button" className="km-btn km-btn--reject"
@@ -301,11 +298,11 @@ export default function KeyMomentsManagement() {
   }
 
   const remove = async (item) => {
-    if (!window.confirm(`Delete "${item.title || 'this key moment'}"? The downloaded video file will also be removed.`)) return
     try {
       await keyMomentsApi.remove(item.id)
       setItems((prev) => prev.filter((i) => i.id !== item.id))
       if (active?.id === item.id) setActive(null)
+      setConfirmDelete(null)
       toast.success('Key moment deleted')
     } catch (err) {
       toast.error(err.response?.data?.error || 'Delete failed')
@@ -321,7 +318,7 @@ export default function KeyMomentsManagement() {
           </h1>
           <p className="adm-section__sub">
             <Film size={11} style={{ opacity: 0.5 }} />
-            Mission: AI Possible · clips ingested from the AWS S3 metadata feed · {items.length} stored
+            Created By SmartClip Generator· {items.length} stored
           </p>
         </div>
         <div className="km-toolbar">
@@ -425,10 +422,7 @@ export default function KeyMomentsManagement() {
                     <XCircle size={13} /> Reject
                   </button>
                 )}
-                <button type="button" className="km-btn km-btn--danger km-btn--sm"
-                  onClick={() => remove(item)} title="Delete">
-                  <Trash2 size={13} />
-                </button>
+                
               </div>
             </li>
           ))}
@@ -443,7 +437,6 @@ export default function KeyMomentsManagement() {
           onClose={() => setActive(null)}
           onSaved={upsert}
           onStatusChange={changeStatus}
-          onDelete={remove}
         />
       )}
     </section>

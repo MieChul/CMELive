@@ -3,8 +3,8 @@ import { getLatestNews, getLatestNewsDebug, postReview } from '../controllers/ai
 import { requireAuth } from '../middleware/auth.js'
 
 const r = Router()
-r.get('/latest-news', getLatestNews)
-r.get('/latest-news/debug', getLatestNewsDebug)
+r.get('/latest-news', requireAuth, getLatestNews)
+r.get('/latest-news/debug', requireAuth, getLatestNewsDebug)
 r.post('/review', requireAuth, postReview)
 
 export default r

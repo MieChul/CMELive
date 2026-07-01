@@ -1,5 +1,5 @@
 import './config/env.js'
-import { getImageSignedUrl } from './services/imageStorageService.js'
+import { getImageSignedUrl, getObjectSignedUrl } from './services/imageStorageService.js'
 import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
@@ -18,6 +18,7 @@ import adminRoutes from './routes/admin.js'
 import { testimonialsPublicRoutes, testimonialsAdminRoutes } from './routes/testimonials.js'
 import { cornerOfficePublicRoutes, cornerOfficeAdminRoutes } from './routes/cornerOffice.js'
 import { keyMomentsPublicRoutes, keyMomentsAdminRoutes } from './routes/keyMoments.js'
+import { uniqueBusinessStoriesPublicRoutes, uniqueBusinessStoriesAdminRoutes } from './routes/uniqueBusinessStories.js'
 import { runNewsAgent } from './services/newsAgentService.js'
 import cron from 'node-cron'
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -41,7 +42,7 @@ const rateLimitKeyGenerator = (req) => {
   return raw.replace(/:\d+$/, '')
 }
 
-const rateLimitOpts = { validate: { ipKeyGenerator: false } }
+const rateLimitOpts = { validate: { ipv6SubnetOrKeyGenerator: false, keyGeneratorIpFallback: false } }
 
 app.use(
   helmet({
@@ -50,21 +51,31 @@ app.use(
       directives: {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"], // CSS modules inject <style> tags at runtime
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
         imgSrc: ["'self'", 'https:', 'data:'],
         connectSrc: ["'self'"],
-        fontSrc: ["'self'", 'data:'],
+        fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
         objectSrc: ["'none'"],
         mediaSrc: ["'self'"],
         frameSrc: ["'none'"],
         frameAncestors: ["'none'"],
         formAction: ["'self'"],
         baseUri: ["'self'"],
+        upgradeInsecureRequests: [],
       },
     },
     referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
   }),
 )
+
+// Permissions-Policy: restrict browser features not used by this app
+app.use((_req, res, next) => {
+  res.setHeader(
+    'Permissions-Policy',
+    'camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), accelerometer=(), gyroscope=(), magnetometer=(), ambient-light-sensor=(), autoplay=(), fullscreen=(self), picture-in-picture=()',
+  )
+  next()
+})
 
 const productionOrigins = [config.frontendUrl].filter(Boolean)
 app.use(
@@ -160,11 +171,54 @@ app.use('/api/surveys', (req, res, next) => {
   next()
 })
 
+const engagementRateLimit = rateLimit({
+  ...rateLimitOpts,
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: rateLimitKeyGenerator,
+  message: { error: 'Too many requests. Please try again later.' },
+})
+app.use((req, res, next) => {
+  if (req.method === 'POST' && /^\/api\/(news|key-moments)\/\d+\/(view|share|like)$/.test(req.path)) {
+    return engagementRateLimit(req, res, next)
+  }
+  next()
+})
+
 app.get('/api/health', (req, res) => res.json({ ok: true }))
+
+const SAFE_FILENAME_RE = /^[a-zA-Z0-9_-]{1,200}\.(png|jpg|jpeg|webp|gif)$/
+const SAFE_FOLDER_RE = /^[a-zA-Z0-9_-]+$/
+const SAFE_MEDIA_FILENAME_RE = /^[a-zA-Z0-9_.-]{1,200}$/
+
+// Proxy for all GCS-backed media (images + videos uploaded via admin)
+// 4-hour TTL for videos so streaming doesn't expire mid-watch
+app.get('/api/media/:folder/:filename', async (req, res) => {
+  try {
+    const { folder, filename } = req.params
+    if (!SAFE_FOLDER_RE.test(folder) || !SAFE_MEDIA_FILENAME_RE.test(filename)) {
+      return res.status(400).json({ error: 'Invalid path' })
+    }
+    const objectPath = `${folder}/${filename}`
+    const isVideo = /\.(mp4|webm|mov)$/i.test(filename)
+    const ttl = isVideo ? 4 * 60 * 60 * 1000 : 15 * 60 * 1000
+    const signedUrl = await getObjectSignedUrl(objectPath, ttl)
+    if (!signedUrl) return res.status(404).json({ error: 'Not found' })
+    res.redirect(302, signedUrl)
+  } catch {
+    res.status(404).json({ error: 'Not found' })
+  }
+})
 
 app.get('/api/images/:filename', async (req, res) => {
   try {
-    const signedUrl = await getImageSignedUrl(req.params.filename)
+    const { filename } = req.params
+    if (!SAFE_FILENAME_RE.test(filename)) {
+      return res.status(400).json({ error: 'Invalid filename' })
+    }
+    const signedUrl = await getImageSignedUrl(filename)
     if (!signedUrl) return res.status(404).json({ error: 'Image not found' })
     res.redirect(302, signedUrl)
   } catch {
@@ -179,12 +233,13 @@ app.use('/api/news', newsRoutes)
 app.use('/api/testimonials', testimonialsPublicRoutes)
 app.use('/api/corner-office', cornerOfficePublicRoutes)
 app.use('/api/key-moments', keyMomentsPublicRoutes)
+app.use('/api/unique-business-stories', uniqueBusinessStoriesPublicRoutes)
 app.use(
   '/api/admin',
   rateLimit({
     ...rateLimitOpts,
     windowMs: 15 * 60 * 1000,
-    max: 300,
+    max: 60,
     standardHeaders: true,
     legacyHeaders: false,
     keyGenerator: rateLimitKeyGenerator,
@@ -195,6 +250,7 @@ app.use('/api/admin', adminRoutes)
 app.use('/api/admin/testimonials', testimonialsAdminRoutes)
 app.use('/api/admin/corner-office', cornerOfficeAdminRoutes)
 app.use('/api/admin/key-moments', keyMomentsAdminRoutes)
+app.use('/api/admin/unique-business-stories', uniqueBusinessStoriesAdminRoutes)
 
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api/')) {
@@ -230,17 +286,33 @@ app.use((err, req, res, _next) => {
       cron.schedule(config.agent.cronExpression, async () => {
         console.log('[cron] News agent starting...')
         try {
-          // Respect admin config auto-fetch toggle
-          const cfgRow = await dbGet("SELECT value FROM admin_config WHERE key = ?", ['agent_config'])
+          // Respect admin config auto-fetch toggle (AI feed)
+          const cfgRow = await dbGet("SELECT value FROM admin_config WHERE key = 'agent_config'")
+          let runAi = true
           if (cfgRow) {
             const dbCfg = JSON.parse(cfgRow.value)
-            if (dbCfg.autoFetch === false) {
-              console.log('[cron] Auto-fetch disabled in admin config — skipping run')
-              return
-            }
+            if (dbCfg.autoFetch === false) runAi = false
           }
-          const result = await runNewsAgent()
-          console.log('[cron] News agent complete:', result)
+          if (runAi) {
+            const result = await runNewsAgent({ feedType: 'ai' })
+            console.log('[cron] News agent complete:', result)
+          } else {
+            console.log('[cron] Auto-fetch disabled for AI feed — skipping run')
+          }
+
+          // Respect admin config auto-fetch toggle (Trends feed)
+          const trendsRow = await dbGet("SELECT value FROM admin_config WHERE key = 'trends_config'")
+          let runTrends = true
+          if (trendsRow) {
+            const trendsCfg = JSON.parse(trendsRow.value)
+            if (trendsCfg.autoFetch === false) runTrends = false
+          }
+          if (runTrends) {
+            const trendsResult = await runNewsAgent({ feedType: 'trends' })
+            console.log('[cron] Trends agent complete:', trendsResult)
+          } else {
+            console.log('[cron] Auto-fetch disabled for Trends feed — skipping run')
+          }
         } catch (err) {
           console.error('[cron] News agent failed:', err?.message || err)
         }

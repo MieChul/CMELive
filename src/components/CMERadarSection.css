@@ -40,6 +40,9 @@
   transform: translateY(0);
 }
 
+/* ── Feed wrapper — layout stays fixed; only slot content rotates ── */
+.radar-feed { width: 100%; }
+
 /* minmax(0, 1fr) prevents nowrap text from collapsing the left column */
 .radar-content {
   display: grid;
@@ -48,7 +51,17 @@
   align-items: stretch;
 }
 
-/* ── Left column: two image cards ── */
+/* Slots are the stable, fixed positions. Their inner card fades in on rotate. */
+.radar-slot { min-width: 0; }
+.radar-slot--major { flex: 1; display: flex; min-width: 0; }
+.radar-slot--minor { flex: 1; display: flex; min-height: 0; }
+
+@keyframes slotIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── Left column: image / major cards ── */
 .radar-cards {
   display: flex;
   gap: clamp(10px, 1.39vw, 20px);
@@ -57,14 +70,8 @@
 .radar-card {
   flex: 1;
   min-width: 0;
-  opacity: 0;
-  transform: translateY(30px);
-  transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
-}
-
-.radar-card.visible {
-  opacity: 1;
-  transform: translateY(0);
+  cursor: pointer;
+  animation: slotIn 0.55s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 /* Wrapper holds image + overlapping arrow button */
@@ -79,6 +86,7 @@
   overflow: hidden;
   aspect-ratio: 1 / 1;
   width: 100%;
+  background: #1E1A22;
 }
 
 .radar-card-image img {
@@ -87,6 +95,21 @@
   object-fit: cover;
   display: block;
   transition: transform 0.5s ease;
+}
+
+/* Gradient placeholder shown when a story has no image */
+.radar-card-image__ph {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.95);
+  font-family: 'Bakehaus', 'Bebas Neue', sans-serif;
+  font-size: clamp(20px, 2.2vw, 34px);
+  letter-spacing: -0.5px;
 }
 
 .radar-card:hover .radar-card-image img { transform: scale(1.05); }
@@ -158,7 +181,7 @@
   line-height: 1.25;
 }
 
-/* ── Right column: four info cards ── */
+/* ── Right column: minor / supporting cards ── */
 .info-cards {
   display: flex;
   flex-direction: column;
@@ -173,19 +196,17 @@
   justify-content: space-between;
   padding: clamp(12px, 1.39vw, 20px) clamp(14px, 1.67vw, 24px);
   border-radius: 16px;
-  opacity: 0;
-  transform: translateX(30px);
-  transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
   gap: 12px;
   min-width: 0;
+  cursor: pointer;
+  animation: slotIn 0.55s cubic-bezier(0.23, 1, 0.32, 1);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
-.info-card.visible {
-  opacity: 1;
-  transform: translateX(0);
+.info-card:hover {
+  transform: translateX(4px);
+  box-shadow: 0 10px 26px rgba(30, 26, 34, 0.14);
 }
-
-.info-card:hover { transform: translateX(4px); }
 
 .info-card-content {
   flex: 1;
@@ -240,31 +261,128 @@
 
 .info-card-btn:hover { transform: scale(1.1) rotate(45deg); }
 
-/* ─── Responsive ─── */
-@media (max-width: 1200px) {
-  .radar-content { grid-template-columns: 1fr; }
-  .radar-cards { flex-direction: row; }
-  .info-cards { justify-content: flex-start; }
+/* ═══ Progress indicator (replaces traditional dots) ═══ */
+.radar-progress {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: min(1544px, 100%);
+  margin: clamp(18px, 2.6vw, 32px) auto 0;
+}
+
+.radar-progress__track {
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(30, 26, 34, 0.12);
+  overflow: hidden;
+}
+
+.radar-progress__bar {
+  height: 100%;
+  width: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #E05A4E, #F2665B);
+  transform-origin: left center;
+  animation-name: progressFill;
+  animation-timing-function: linear;
+  animation-iteration-count: 1;
+  animation-fill-mode: forwards;
+}
+
+@keyframes progressFill {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+.radar-progress__count {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 600;
+  font-size: clamp(11px, 0.9vw, 13px);
+  color: #1E1A22;
+  white-space: nowrap;
+  min-width: 64px;
+  text-align: right;
+}
+
+.radar-progress__paused { opacity: 0.55; font-weight: 500; }
+
+/* ═══ Empty / loading state ═══ */
+.radar-empty {
+  width: min(760px, 100%);
+  margin: 0 auto;
+  min-height: clamp(180px, 26vw, 300px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  text-align: center;
+  padding: clamp(28px, 5vw, 56px) 24px;
+  border: 1.5px dashed rgba(30, 26, 34, 0.18);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.radar-empty__title {
+  font-family: 'Bakehaus', 'Bebas Neue', sans-serif;
+  font-size: clamp(28px, 4vw, 48px);
+  letter-spacing: -1px;
+  color: #1E1A22;
+}
+
+.radar-empty__sub {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 500;
+  font-size: clamp(13px, 1.1vw, 16px);
+  line-height: 1.55;
+  color: rgba(30, 26, 34, 0.7);
+  max-width: 52ch;
+}
+
+.radar-empty__spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid rgba(30, 26, 34, 0.15);
+  border-top-color: #E05A4E;
+  animation: radarSpin 0.8s linear infinite;
+}
+
+@keyframes radarSpin { to { transform: rotate(360deg); } }
+
+/* ═══ Responsive — slot counts are driven by JS via [data-layout] ═══ */
+.radar-feed[data-layout="desktop"] .radar-content {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.radar-feed[data-layout="tablet"] .radar-content {
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+}
+
+.radar-feed[data-layout="mobile"] .radar-content {
+  grid-template-columns: 1fr;
+}
+
+.radar-feed[data-layout="mobile"] .radar-card-image {
+  aspect-ratio: 16 / 10;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .radar-card,
+  .info-card,
+  .radar-progress__bar { animation: none; }
 }
 
 @media (max-width: 768px) {
   .cme-radar-section { padding: 32px 16px; }
   .radar-title { letter-spacing: -3px; }
-  .radar-cards { flex-direction: row; gap: 12px; }
   .radar-card-btn { width: 44px; height: 44px; }
-  .info-cards {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-  }
   .info-card { padding: 14px; }
-  .info-card-description { -webkit-line-clamp: 2; }
 }
 
 @media (max-width: 480px) {
-  .radar-cards { flex-direction: column; }
-  .info-cards { grid-template-columns: 1fr; }
   .info-card-title { font-size: 15px; }
-  .info-card-description { font-size: 12px; }
+  .info-card-description { font-size: 12px; -webkit-line-clamp: 2; }
   .radar-card-meta { gap: 10px; flex-wrap: wrap; }
 }

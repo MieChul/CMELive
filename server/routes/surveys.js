@@ -1,8 +1,7 @@
 import { Router } from 'express'
 import multer from 'multer'
-import { fileURLToPath } from 'url'
-import { dirname, join } from 'path'
-import { existsSync, mkdirSync } from 'fs'
+import { checkFileMagicBytesFromBuffer, ALLOWED_IMAGE_MIMES } from '../utils/upload.js'
+import { uploadBuffer } from '../services/imageStorageService.js'
 import {
   listSurveys,
   getSurvey,
@@ -18,25 +17,13 @@ import {
 } from '../controllers/surveyController.js'
 import { requireAuth, optionalAuth } from '../middleware/auth.js'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const uploadDir = join(__dirname, '..', 'uploads')
-if (!existsSync(uploadDir)) mkdirSync(uploadDir, { recursive: true })
 const ALLOWED_IMAGE = /^image\/(jpeg|jpg|pjpeg|png|gif|webp)$/i
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => {
-    const safe = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`
-    cb(null, safe)
-  },
-})
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    if (file.mimetype && ALLOWED_IMAGE.test(file.mimetype)) {
-      return cb(null, true)
-    }
+    if (file.mimetype && ALLOWED_IMAGE.test(file.mimetype)) return cb(null, true)
     cb(new Error('Only image uploads are allowed (JPEG, PNG, GIF, WebP)'))
   },
 })
@@ -45,11 +32,19 @@ const r = Router()
 r.get('/', optionalAuth, listSurveys)
 r.get('/mine', requireAuth, listMySurveys)
 r.post('/upload-image', requireAuth, (req, res) => {
-  upload.single('image')(req, res, (err) => {
+  upload.single('image')(req, res, async (err) => {
     if (err) return res.status(400).json({ error: err.message })
     if (!req.file) return res.status(400).json({ error: 'file required' })
-    const publicUrl = `/uploads/${req.file.filename}`
-    res.json({ imageUrl: publicUrl })
+
+    const valid = await checkFileMagicBytesFromBuffer(req.file.buffer, ALLOWED_IMAGE_MIMES)
+    if (!valid) return res.status(400).json({ error: 'File content does not match an allowed image type' })
+
+    const filename = `survey-img-${Date.now()}-${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+    const objectPath = `surveys/${filename}`
+    const uploaded = await uploadBuffer(req.file.buffer, objectPath, req.file.mimetype)
+
+    const imageUrl = uploaded ? `/api/media/${objectPath}` : `/uploads/${filename}`
+    res.json({ imageUrl })
   })
 })
 r.get('/:id(\\d+)', optionalAuth, getSurvey)

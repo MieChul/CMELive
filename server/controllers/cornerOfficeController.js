@@ -1,4 +1,4 @@
-import { unlink, stat } from 'fs/promises'
+﻿import { unlink, stat } from 'fs/promises'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { all, get, run } from '../config/db.js'
@@ -16,7 +16,7 @@ async function deleteUploadedFile(url) {
   try {
     const s = await stat(full)
     if (s.isFile()) await unlink(full)
-  } catch { /* already gone — ignore */ }
+  } catch { /* already gone â€” ignore */ }
 }
 
 /** Accepts http(s) absolute URLs OR site-relative paths under /uploads. */
@@ -115,23 +115,23 @@ function validate(body, { partial = false } = {}) {
       body.isActive === 1 ||
       body.isActive === '1' ||
       body.isActive === 'true'
-        ? 1
-        : 0
+        ? true
+        : false
   }
   return { errors, value: out }
 }
 
-const SELECT_COLS = `id, title, subtitle, imageUrl, videoUrl, numberColor, borderColor,
-                     displayOrder, isActive, createdDate, updatedDate`
+const SELECT_COLS = `id, title, subtitle, "imageUrl", "videoUrl", "numberColor", "borderColor",
+                     "displayOrder", "isActive", "createdDate", "updatedDate"`
 
-/** Public — homepage Corner Office section. Active only, sorted by displayOrder. */
+/** Public â€” homepage Corner Office section. Active only, sorted by displayOrder. */
 export async function listPublicConversations(req, res) {
   try {
     const rows = await all(
       `SELECT ${SELECT_COLS}
-       FROM cornerOfficeConversations
-       WHERE isActive = 1
-       ORDER BY displayOrder, id DESC`,
+       FROM "cornerOfficeConversations"
+       WHERE "isActive" = true
+       ORDER BY "displayOrder", id DESC`,
     )
     return res.json({ ok: true, conversations: rows.map(serialize) })
   } catch (err) {
@@ -140,13 +140,13 @@ export async function listPublicConversations(req, res) {
   }
 }
 
-/** Admin — list all (active + inactive). */
+/** Admin â€” list all (active + inactive). */
 export async function listAllConversations(req, res) {
   try {
     const rows = await all(
       `SELECT ${SELECT_COLS}
-       FROM cornerOfficeConversations
-       ORDER BY displayOrder, id DESC`,
+       FROM "cornerOfficeConversations"
+       ORDER BY "displayOrder", id DESC`,
     )
     return res.json({ ok: true, conversations: rows.map(serialize) })
   } catch (err) {
@@ -162,7 +162,7 @@ export async function createConversation(req, res) {
   try {
     const order = value.displayOrder ?? 0
     const clash = await get(
-      'SELECT id FROM cornerOfficeConversations WHERE displayOrder = ?',
+      'SELECT id FROM "cornerOfficeConversations" WHERE "displayOrder" = ?',
       [order],
     )
     if (clash) {
@@ -174,9 +174,9 @@ export async function createConversation(req, res) {
     const now = new Date().toISOString()
     const actor = req.user?.email ?? 'admin'
     const r = await run(
-      `INSERT INTO cornerOfficeConversations
-       (title, subtitle, imageUrl, videoUrl, numberColor, borderColor,
-        displayOrder, isActive, createdDate, createdBy, updatedDate, updatedBy)
+      `INSERT INTO "cornerOfficeConversations"
+       (title, subtitle, "imageUrl", "videoUrl", "numberColor", "borderColor",
+        "displayOrder", "isActive", "createdDate", "createdBy", "updatedDate", "updatedBy")
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         value.title,
@@ -186,12 +186,12 @@ export async function createConversation(req, res) {
         value.numberColor ?? '#F2665B',
         value.borderColor ?? 'rgba(89,22,139,0.3)',
         order,
-        value.isActive ?? 1,
+        value.isActive ?? true,
         now, actor, now, actor,
       ],
     )
     const row = await get(
-      `SELECT ${SELECT_COLS} FROM cornerOfficeConversations WHERE id = ?`,
+      `SELECT ${SELECT_COLS} FROM "cornerOfficeConversations" WHERE id = ?`,
       [r.lastInsertRowid],
     )
     return res.status(201).json({ ok: true, conversation: serialize(row) })
@@ -199,6 +199,17 @@ export async function createConversation(req, res) {
     console.error('[cornerOffice] create failed:', err)
     return res.status(500).json({ error: 'Failed to create conversation' })
   }
+}
+
+const CONVERSATION_FIELD_SQL = {
+  title:        '"title" = ?',
+  subtitle:     '"subtitle" = ?',
+  imageUrl:     '"imageUrl" = ?',
+  videoUrl:     '"videoUrl" = ?',
+  numberColor:  '"numberColor" = ?',
+  borderColor:  '"borderColor" = ?',
+  displayOrder: '"displayOrder" = ?',
+  isActive:     '"isActive" = ?',
 }
 
 export async function updateConversation(req, res) {
@@ -212,12 +223,12 @@ export async function updateConversation(req, res) {
   if (!fields.length) return res.status(400).json({ error: 'No fields to update' })
 
   try {
-    const existing = await get('SELECT id, imageUrl, videoUrl FROM cornerOfficeConversations WHERE id = ?', [id])
+    const existing = await get('SELECT id, "imageUrl", "videoUrl" FROM "cornerOfficeConversations" WHERE id = ?', [id])
     if (!existing) return res.status(404).json({ error: 'Conversation not found' })
 
     if (Object.prototype.hasOwnProperty.call(value, 'displayOrder')) {
       const clash = await get(
-        'SELECT id FROM cornerOfficeConversations WHERE displayOrder = ? AND id <> ?',
+        'SELECT id FROM "cornerOfficeConversations" WHERE "displayOrder" = ? AND id <> ?',
         [value.displayOrder, id],
       )
       if (clash) {
@@ -227,13 +238,32 @@ export async function updateConversation(req, res) {
       }
     }
 
-    const set = fields.map((k) => `${k} = ?`).join(', ')
-    const params = fields.map((k) => value[k])
-    params.push(new Date().toISOString(), req.user?.email ?? 'admin', id)
-
     await run(
-      `UPDATE cornerOfficeConversations SET ${set}, updatedDate = ?, updatedBy = ? WHERE id = ?`,
-      params,
+      `UPDATE "cornerOfficeConversations" SET
+        "title"       = COALESCE(?, "title"),
+        "subtitle"    = COALESCE(?, "subtitle"),
+        "imageUrl"    = COALESCE(?, "imageUrl"),
+        "videoUrl"    = COALESCE(?, "videoUrl"),
+        "numberColor" = COALESCE(?, "numberColor"),
+        "borderColor" = COALESCE(?, "borderColor"),
+        "displayOrder"= COALESCE(?, "displayOrder"),
+        "isActive"    = COALESCE(?, "isActive"),
+        "updatedDate" = ?,
+        "updatedBy"   = ?
+       WHERE id = ?`,
+      [
+        value.title        ?? null,
+        value.subtitle     ?? null,
+        value.imageUrl     ?? null,
+        value.videoUrl     ?? null,
+        value.numberColor  ?? null,
+        value.borderColor  ?? null,
+        value.displayOrder ?? null,
+        value.isActive     ?? null,
+        new Date().toISOString(),
+        req.user?.email ?? 'admin',
+        id,
+      ],
     )
 
     if (Object.prototype.hasOwnProperty.call(value, 'imageUrl') && existing.imageUrl && existing.imageUrl !== value.imageUrl) {
@@ -244,7 +274,7 @@ export async function updateConversation(req, res) {
     }
 
     const row = await get(
-      `SELECT ${SELECT_COLS} FROM cornerOfficeConversations WHERE id = ?`,
+      `SELECT ${SELECT_COLS} FROM "cornerOfficeConversations" WHERE id = ?`,
       [id],
     )
     return res.json({ ok: true, conversation: serialize(row) })
@@ -258,9 +288,9 @@ export async function deleteConversation(req, res) {
   const id = Number(req.params.id)
   if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' })
   try {
-    const existing = await get('SELECT id, imageUrl, videoUrl FROM cornerOfficeConversations WHERE id = ?', [id])
+    const existing = await get('SELECT id, "imageUrl", "videoUrl" FROM "cornerOfficeConversations" WHERE id = ?', [id])
     if (!existing) return res.status(404).json({ error: 'Conversation not found' })
-    await run('DELETE FROM cornerOfficeConversations WHERE id = ?', [id])
+    await run('DELETE FROM "cornerOfficeConversations" WHERE id = ?', [id])
     await deleteUploadedFile(existing.imageUrl)
     await deleteUploadedFile(existing.videoUrl)
     return res.json({ ok: true })
@@ -269,3 +299,5 @@ export async function deleteConversation(req, res) {
     return res.status(500).json({ error: 'Failed to delete conversation' })
   }
 }
+
+

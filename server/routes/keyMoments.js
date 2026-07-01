@@ -15,9 +15,9 @@ import {
 } from '../controllers/keyMomentsController.js'
 
 const publicRouter = Router()
-publicRouter.get('/', listPublicKeyMoments)
+publicRouter.get('/', optionalAuth, listPublicKeyMoments)
 publicRouter.get('/:id(\\d+)/playback', streamPublicKeyMomentPlayback)
-publicRouter.post('/:id(\\d+)/view',  recordKeyMomentView)
+publicRouter.post('/:id(\\d+)/view',  optionalAuth, recordKeyMomentView)
 publicRouter.post('/:id(\\d+)/share', recordKeyMomentShare)
 publicRouter.post('/:id(\\d+)/like',  optionalAuth, likeKeyMoment)
 

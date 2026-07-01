@@ -6,8 +6,8 @@ import {
   Zap, Globe, Filter, Hash, Star, Activity, ChevronRight, Clock,
   TrendingUp, Plus, Minus, AlertCircle, Rss, ChevronDown, ChevronUp,
   Home, Image, Upload, ImagePlus, Film, MoreVertical,
-  Heart, Share2, BarChart3,
-  PanelLeftClose, PanelLeftOpen, MessageSquareQuote,
+  Heart, Share2, BarChart3, Briefcase,
+  PanelLeftClose, PanelLeftOpen, MessageSquareQuote, Menu,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { news, admin } from '../services/api'
@@ -15,6 +15,7 @@ import UserManagement from './UserManagement.jsx'
 import TestimonialsManagement from './TestimonialsManagement.jsx'
 import CornerOfficeManagement from './CornerOfficeManagement.jsx'
 import KeyMomentsManagement from './KeyMomentsManagement.jsx'
+import UniqueBusinessStoriesManagement from './UniqueBusinessStoriesManagement.jsx'
 import './AdminPage.css'
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
@@ -27,6 +28,13 @@ const CAT_COLORS = {
   'Products & Tools': ['#10B981', '#059669'],
   'Policy & Ethics':  ['#F59E0B', '#D97706'],
   'Science':          ['#8B5CF6', '#6D28D9'],
+  // Trends (general world news) categories
+  'World':            ['#F2665B', '#C94840'],
+  'Politics':         ['#F59E0B', '#D97706'],
+  'Technology':       ['#0EA5E9', '#0284C7'],
+  'Sports':           ['#10B981', '#059669'],
+  'Health':           ['#EC4899', '#BE185D'],
+  'Culture':          ['#A78BFA', '#7C3AED'],
 }
 
 const STATUS_COLORS = { pending: '#FFB347', approved: '#00E5A0', rejected: '#FF6B6B' }
@@ -619,6 +627,14 @@ const DEFAULT_CFG = {
   keywords: ['artificial intelligence','machine learning','LLM','GPT','neural network','media','streaming'],
 }
 
+const DEFAULT_TRENDS_CFG = {
+  autoFetch: true, cronExpression: '0 8 * * *', maxPerBatch: 5, minAiScore: 50,
+  enableImages: false, imagesPerArticle: 3,
+  enabledSources: [], customSources: [],
+  categories: ['World','Politics','Business','Technology','Science','Sports','Health','Culture'],
+  keywords: [],
+}
+
 function SourceConfigPanel({ cfg, catalog, tiers, onCfgChange, dirty, onSave, saving, onRunAgent, agentRunning }) {
   const [addingCustom, setAddingCustom] = useState(false)
   const [newSrc, setNewSrc] = useState({ label: '', rssUrl: '' })
@@ -817,6 +833,7 @@ const NAV = [
     children: [
       { id: 'testimonials', label: 'Testimonials', Icon: MessageSquareQuote },
       { id: 'cornerOffice', label: 'Corner Office', Icon: Film },
+      { id: 'uniqueBusinessStories', label: 'Unique Business Stories', Icon: Briefcase },
     ],
   },
   {
@@ -851,6 +868,7 @@ export default function AdminPage() {
   const [activeSection, setActiveSection] = useState('news')
   const [newsTab, setNewsTab]             = useState('feed')
   const [rows, setRows]                   = useState([])
+  const [trendsRows, setTrendsRows]       = useState([])
   const [loading, setLoading]             = useState(true)
   const [fetchError, setFetchError]       = useState('')
   const [activeFilter, setActiveFilter]   = useState('all')
@@ -863,12 +881,19 @@ export default function AdminPage() {
   const [cfg, setCfg]         = useState(null)
   const [catalog, setCatalog] = useState(null)
   const [tiers, setTiers]     = useState([])
+  const [trendsCfg, setTrendsCfg]         = useState(null)
+  const [trendsCatalog, setTrendsCatalog] = useState(null)
+  const [trendsTiers, setTrendsTiers]     = useState([])
+  const [configFeed, setConfigFeed]       = useState('ai')
   const [cfgDirty, setCfgDirty] = useState(false)
+  const [trendsCfgDirty, setTrendsCfgDirty] = useState(false)
   const [cfgSaving, setCfgSaving] = useState(false)
   const [openMenu, setOpenMenu] = useState(null)
   const [menuPos,  setMenuPos]  = useState(null)
   const [statsOpen, setStatsOpen] = useState(true)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [expandedMenus, setExpandedMenus] = useState({})
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
 
   useEffect(() => {
     const close = () => { setOpenMenu(null); setMenuPos(null) }
@@ -880,47 +905,62 @@ export default function AdminPage() {
     setLoading(true); setFetchError('')
     setImgErrors({})
     try {
-      const { data } = await news.list()
-      setRows(data.items || [])
+      const [aiRes, trendsRes] = await Promise.all([
+        news.list('ai'),
+        news.list('trends'),
+      ])
+      setRows(aiRes.data.items || [])
+      setTrendsRows(trendsRes.data.items || [])
     } catch { setFetchError('Failed to load articles.') }
     finally { setLoading(false) }
   }, [])
 
   useEffect(() => {
-    admin.getConfig().then(({ data }) => setCfg({ ...DEFAULT_CFG, ...data.config })).catch(() => setCfg(DEFAULT_CFG))
-    admin.getSourceCatalog().then(({ data }) => { setCatalog(data.catalog); setTiers(data.tiers || []) }).catch(() => {})
+    admin.getConfig('ai').then(({ data }) => setCfg({ ...DEFAULT_CFG, ...data.config })).catch(() => setCfg(DEFAULT_CFG))
+    admin.getSourceCatalog('ai').then(({ data }) => { setCatalog(data.catalog); setTiers(data.tiers || []) }).catch(() => {})
+    admin.getConfig('trends').then(({ data }) => setTrendsCfg({ ...DEFAULT_TRENDS_CFG, ...data.config })).catch(() => setTrendsCfg(DEFAULT_TRENDS_CFG))
+    admin.getSourceCatalog('trends').then(({ data }) => { setTrendsCatalog(data.catalog); setTrendsTiers(data.tiers || []) }).catch(() => {})
     loadNews()
   }, [loadNews])
 
+  // The article tabs (Feed = AI, Trends = general) share the same UI but different data
+  const feedType = newsTab === 'trends' ? 'trends' : 'ai'
+  const activeRows = newsTab === 'trends' ? trendsRows : rows
+
   const counts = useMemo(() => ({
-    all: rows.length,
-    pending:  rows.filter((r) => r.status === 'pending').length,
-    approved: rows.filter((r) => r.status === 'approved').length,
-    rejected: rows.filter((r) => r.status === 'rejected').length,
-  }), [rows])
+    all: activeRows.length,
+    pending:  activeRows.filter((r) => r.status === 'pending').length,
+    approved: activeRows.filter((r) => r.status === 'approved').length,
+    rejected: activeRows.filter((r) => r.status === 'rejected').length,
+  }), [activeRows])
 
   const engagementTotals = useMemo(() => ({
-    likes:  rows.reduce((s, r) => s + (r.likes  ?? 0), 0),
-    views:  rows.reduce((s, r) => s + (r.views  ?? 0), 0),
-    shares: rows.reduce((s, r) => s + (r.shares ?? 0), 0),
-  }), [rows])
+    likes:  activeRows.reduce((s, r) => s + (r.likes  ?? 0), 0),
+    views:  activeRows.reduce((s, r) => s + (r.views  ?? 0), 0),
+    shares: activeRows.reduce((s, r) => s + (r.shares ?? 0), 0),
+  }), [activeRows])
 
   const avgScore = useMemo(() => {
-    if (!rows.length) return 0
-    return Math.round(rows.reduce((s, r) => s + (r.aiScore || 0), 0) / rows.length)
-  }, [rows])
+    if (!activeRows.length) return 0
+    return Math.round(activeRows.reduce((s, r) => s + (r.aiScore || 0), 0) / activeRows.length)
+  }, [activeRows])
 
   const filteredRows = useMemo(() => {
-    const base = activeFilter === 'all' ? rows : rows.filter((r) => r.status === activeFilter)
+    const base = activeFilter === 'all' ? activeRows : activeRows.filter((r) => r.status === activeFilter)
     return [...base].sort((a, b) => (b.aiScore || 0) - (a.aiScore || 0))
-  }, [rows, activeFilter])
+  }, [activeRows, activeFilter])
 
   const getRank = (row) => filteredRows.findIndex((r) => r.id === row.id) + 1
+
+  const updateRowInState = (id, updater) => {
+    setRows((p) => p.map((r) => r.id === id ? updater(r) : r))
+    setTrendsRows((p) => p.map((r) => r.id === id ? updater(r) : r))
+  }
 
   const handleStatusChange = async (row, status) => {
     try {
       await news.update(row.id, { ...row, status })
-      setRows((p) => p.map((r) => r.id === row.id ? { ...r, status } : r))
+      updateRowInState(row.id, (r) => ({ ...r, status }))
       if (viewingItem?.id === row.id) setViewingItem((p) => p ? { ...p, status } : p)
       toast.success(`Article ${status}.`)
     } catch { toast.error('Status update failed.') }
@@ -930,14 +970,21 @@ export default function AdminPage() {
     try {
       await news.remove(row.id)
       setRows((p) => p.filter((r) => r.id !== row.id))
+      setTrendsRows((p) => p.filter((r) => r.id !== row.id))
       toast.success('Deleted.')
     } catch { toast.error('Delete failed.') }
   }
 
   const handleRunAgent = async (body = {}) => {
+    const runFeed = body.feedType || feedType
     setAgentRunning(true)
     try {
-      const { data } = await admin.runNewsAgent(body)
+      const { data } = await admin.runNewsAgent({ ...body, feedType: runFeed })
+      // Backend fires agent async and returns immediately — no result data yet
+      if (data.ok && !('fetched' in data)) {
+        toast('Agent running in the background. Refresh in a minute to see new articles.', { icon: '🔄', duration: 8000 })
+        return
+      }
       if (data.inserted > 0) {
         toast.success(`${data.inserted} new article${data.inserted > 1 ? 's' : ''} added`)
         loadNews()
@@ -963,13 +1010,21 @@ export default function AdminPage() {
 
   const openRunPanel = () => setShowRunPanel(true)
 
-  const onCfgChange = (key, val) => { setCfg((p) => ({ ...p, [key]: val })); setCfgDirty(true) }
+  // Config tab operates on whichever feed is selected via the inner toggle
+  const activeCfg        = configFeed === 'trends' ? trendsCfg : cfg
+  const activeCatalog    = configFeed === 'trends' ? trendsCatalog : catalog
+  const activeTiers      = configFeed === 'trends' ? trendsTiers : tiers
+  const activeCfgDirty   = configFeed === 'trends' ? trendsCfgDirty : cfgDirty
+  const setActiveCfg     = configFeed === 'trends' ? setTrendsCfg : setCfg
+  const setActiveDirty   = configFeed === 'trends' ? setTrendsCfgDirty : setCfgDirty
+
+  const onCfgChange = (key, val) => { setActiveCfg((p) => ({ ...p, [key]: val })); setActiveDirty(true) }
   const saveConfig = async () => {
     setCfgSaving(true)
     try {
-      await admin.updateConfig(cfg)
+      await admin.updateConfig(activeCfg, configFeed)
       toast.success('Configuration saved')
-      setCfgDirty(false)
+      setActiveDirty(false)
     } catch { toast.error('Failed to save config') }
     finally { setCfgSaving(false) }
   }
@@ -978,8 +1033,34 @@ export default function AdminPage() {
     <div className={`adm-root ${sidebarCollapsed ? 'adm-root--collapsed' : ''}`}>
       <WaveBackground />
 
+      {/* ── Mobile Top Bar ── */}
+      <header className="adm-mobile-header">
+        <button
+          type="button"
+          className="adm-hamburger"
+          onClick={() => setMobileSidebarOpen(true)}
+          aria-label="Open navigation menu"
+        >
+          <Menu size={22} />
+        </button>
+        <div className="adm-mobile-brand">
+          <LtmLogo />
+          <span className="adm-mobile-brand__name">CME Live</span>
+        </div>
+        <span className="adm-badge">ADMIN</span>
+      </header>
+
+      {/* ── Mobile Overlay ── */}
+      {mobileSidebarOpen && (
+        <div
+          className="adm-mob-overlay"
+          onClick={() => setMobileSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
       {/* ── Sidebar ── */}
-      <aside className={`adm-sidebar ${sidebarCollapsed ? 'adm-sidebar--collapsed' : ''}`}>
+      <aside className={`adm-sidebar ${sidebarCollapsed ? 'adm-sidebar--collapsed' : ''} ${mobileSidebarOpen ? 'adm-sidebar--mobile-open' : ''}`}>
         <button
           type="button"
           className="adm-sidebar__toggle"
@@ -996,6 +1077,14 @@ export default function AdminPage() {
             <span className="adm-brand-name">CME Live</span>
           </div>
           <span className="adm-badge">ADMIN</span>
+          <button
+            type="button"
+            className="adm-sidebar__close"
+            onClick={() => setMobileSidebarOpen(false)}
+            aria-label="Close navigation"
+          >
+            <X size={16} />
+          </button>
         </div>
 
         <nav className="adm-sidebar__nav">
@@ -1003,15 +1092,22 @@ export default function AdminPage() {
             const { id, label, Icon, children } = item
             const isChildActive = children?.some((c) => c.id === activeSection)
             const isActive = activeSection === id || isChildActive
-            const expanded = !!children && isChildActive
+            const isExpanded = expandedMenus[id] ?? false
+            const expanded = !!children && isExpanded
+
             const onClick = () => {
               if (children?.length) {
-                // Activate first child if no child is currently active
-                if (!isChildActive) setActiveSection(children[0].id)
+                // Just toggle expansion, don't automatically select a child
+                setExpandedMenus((prev) => ({
+                  ...prev,
+                  [id]: !prev[id],
+                }))
               } else {
                 setActiveSection(id)
+                setMobileSidebarOpen(false)
               }
             }
+
             return (
               <div key={id} className="adm-nav-group">
                 <button type="button"
@@ -1019,16 +1115,17 @@ export default function AdminPage() {
                   onClick={onClick}>
                   <Icon size={17} strokeWidth={1.8} />
                   <span className="adm-nav__label">{label}</span>
-                  {children
-                    ? <ChevronDown size={13} className={`adm-nav__arrow ${expanded ? 'adm-nav__arrow--open' : ''}`} />
-                    : (isActive && <ChevronRight size={13} className="adm-nav__arrow" />)}
+                  {children && (
+                    <ChevronDown size={13} className={`adm-nav__arrow ${expanded ? 'adm-nav__arrow--open' : ''}`} />
+                  )}
+                  {!children && isActive && <ChevronRight size={13} className="adm-nav__arrow" />}
                 </button>
                 {children && expanded && (
                   <div className="adm-nav__children">
                     {children.map((c) => (
                       <button key={c.id} type="button"
                         className={`adm-nav adm-nav--child ${activeSection === c.id ? 'adm-nav--active' : ''}`}
-                        onClick={() => setActiveSection(c.id)}>
+                        onClick={() => { setActiveSection(c.id); setMobileSidebarOpen(false) }}>
                         <c.Icon size={14} strokeWidth={1.8} />
                         <span className="adm-nav__label">{c.label}</span>
                       </button>
@@ -1041,7 +1138,7 @@ export default function AdminPage() {
         </nav>
 
         <div className="adm-sidebar__bottom">
-          <button type="button" className="adm-nav adm-nav--home" onClick={() => navigate('/')}>
+          <button type="button" className="adm-nav adm-nav--home" onClick={() => { navigate('/'); setMobileSidebarOpen(false) }}>
             <Home size={17} strokeWidth={1.8} />
             <span className="adm-nav__label">Back to Site</span>
           </button>
@@ -1065,11 +1162,14 @@ export default function AdminPage() {
                   <span className="title-spark">News</span> Management
                 </h1>
                 <p className="adm-section__sub">
-                  <Film size={11} style={{ opacity: 0.5 }} /> AI-curated media intelligence · ranked by relevance score
+                  <Film size={11} style={{ opacity: 0.5 }} />
+                  {newsTab === 'trends'
+                    ? ' AI-curated world news · ranked by relevance score'
+                    : ' AI-curated media intelligence · ranked by relevance score'}
                 </p>
               </div>
               <div className="adm-tabs-actions">
-                {newsTab === 'feed' && (
+                {(newsTab === 'feed' || newsTab === 'trends') && (
                   <button type="button" className={`btn-coral ${agentRunning ? 'btn-coral--running' : ''}`}
                     onClick={openRunPanel} disabled={agentRunning}>
                     {agentRunning ? <><RefreshCw size={14} className="spin"/>Running…</> : <><Play size={14}/>Fetch Articles</>}
@@ -1081,8 +1181,12 @@ export default function AdminPage() {
             {/* Tabs */}
             <div className="adm-tabs">
               <button type="button" className={`adm-tab ${newsTab === 'feed' ? 'active' : ''}`}
-                onClick={() => setNewsTab('feed')}>
+                onClick={() => { setNewsTab('feed'); setActiveFilter('all') }}>
                 <Newspaper size={14}/> Feed
+              </button>
+              <button type="button" className={`adm-tab ${newsTab === 'trends' ? 'active' : ''}`}
+                onClick={() => { setNewsTab('trends'); setActiveFilter('all') }}>
+                <TrendingUp size={14}/> Trends
               </button>
               <button type="button" className={`adm-tab ${newsTab === 'config' ? 'active' : ''}`}
                 onClick={() => setNewsTab('config')}>
@@ -1090,8 +1194,8 @@ export default function AdminPage() {
               </button>
             </div>
 
-            {/* FEED TAB */}
-            {newsTab === 'feed' && (
+            {/* FEED + TRENDS TABS (shared UI, different dataset) */}
+            {(newsTab === 'feed' || newsTab === 'trends') && (
               <div className="feed-body">
                 <div className={`stats-accordion ${statsOpen ? 'stats-accordion--open' : ''}`}>
                   <button type="button" className="stats-accordion__head" onClick={() => setStatsOpen((p) => !p)}>
@@ -1270,18 +1374,31 @@ export default function AdminPage() {
             )}
 
             {/* CONFIG TAB */}
-            {newsTab === 'config' && cfg && catalog && (
+            {newsTab === 'config' && (
               <div className="cfg-body">
-                <SourceConfigPanel
-                  cfg={cfg} catalog={catalog} tiers={tiers}
-                  onCfgChange={onCfgChange}
-                  dirty={cfgDirty} onSave={saveConfig} saving={cfgSaving}
-                  onRunAgent={openRunPanel} agentRunning={agentRunning}
-                />
+                <div className="adm-subtabs">
+                  <button type="button" className={`adm-subtab ${configFeed === 'ai' ? 'active' : ''}`}
+                    onClick={() => setConfigFeed('ai')}>
+                    <Newspaper size={13}/> Feed (AI)
+                  </button>
+                  <button type="button" className={`adm-subtab ${configFeed === 'trends' ? 'active' : ''}`}
+                    onClick={() => setConfigFeed('trends')}>
+                    <TrendingUp size={13}/> Trends (World)
+                  </button>
+                </div>
+                {activeCfg && activeCatalog ? (
+                  <SourceConfigPanel
+                    key={configFeed}
+                    cfg={activeCfg} catalog={activeCatalog} tiers={activeTiers}
+                    onCfgChange={onCfgChange}
+                    dirty={activeCfgDirty} onSave={saveConfig} saving={cfgSaving}
+                    onRunAgent={() => { setNewsTab(configFeed === 'trends' ? 'trends' : 'feed'); openRunPanel() }}
+                    agentRunning={agentRunning}
+                  />
+                ) : (
+                  <div className="adm-state"><RefreshCw size={18} className="spin"/><span>Loading config…</span></div>
+                )}
               </div>
-            )}
-            {newsTab === 'config' && !cfg && (
-              <div className="adm-state"><RefreshCw size={18} className="spin"/><span>Loading config…</span></div>
             )}
           </div>
         )}
@@ -1289,6 +1406,7 @@ export default function AdminPage() {
         {activeSection === 'users'        && <UserManagement />}
         {activeSection === 'testimonials' && <TestimonialsManagement />}
         {activeSection === 'cornerOffice' && <CornerOfficeManagement />}
+        {activeSection === 'uniqueBusinessStories' && <UniqueBusinessStoriesManagement />}
         {activeSection === 'keyMoments'   && <KeyMomentsManagement />}
         {activeSection === 'settings'     && <ComingSoon label="Settings" />}
       </main>
@@ -1332,11 +1450,13 @@ export default function AdminPage() {
       })()}
 
       {/* ── Panels & Dialogs ── */}
-      {showRunPanel && cfg && (
+      {showRunPanel && (newsTab === 'trends' ? trendsCfg : cfg) && (
         <RunAgentPanel
-          cfg={cfg} catalog={catalog} tiers={tiers}
+          cfg={newsTab === 'trends' ? trendsCfg : cfg}
+          catalog={newsTab === 'trends' ? trendsCatalog : catalog}
+          tiers={newsTab === 'trends' ? trendsTiers : tiers}
           onClose={() => setShowRunPanel(false)}
-          onRun={handleRunAgent}
+          onRun={(body) => handleRunAgent({ ...body, feedType })}
         />
       )}
       {viewingItem && (
